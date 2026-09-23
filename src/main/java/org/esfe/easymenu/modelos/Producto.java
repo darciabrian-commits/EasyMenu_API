@@ -1,20 +1,24 @@
 package org.esfe.easymenu.modelos;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.math.BigDecimal;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "productos")
 public class Producto {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 100, unique = true)
     private String nombre;
 
     @Column(length = 255)
@@ -33,7 +37,35 @@ public class Producto {
     @Column(nullable = false)
     private boolean activo = true;
 
+    // Constructor corto: lo usa ProductoServiceImpl.crear() (HU-1)
+    public Producto(String nombre, String descripcion, BigDecimal precio, CategoriaProducto categoria) {
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+        this.precio = precio;
+        this.categoria = categoria;
+        this.disponible = true;
+        this.activo = true;
+    }
+
+    // ===== Métodos de dominio (HU-1, HU-8) =====
+
+    public void marcarAgotado() {
+        this.disponible = false;
+    }
+
+    public void marcarDisponible() {
+        this.disponible = true;
+    }
+
     public void darDeBaja() {
         this.activo = false;
+    }
+
+    // HU-1: lo usa ProductoServiceImpl.actualizar()
+    public void actualizarDatos(String nombre, String descripcion, BigDecimal precio, CategoriaProducto categoria) {
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+        this.precio = precio;
+        this.categoria = categoria;
     }
 }
