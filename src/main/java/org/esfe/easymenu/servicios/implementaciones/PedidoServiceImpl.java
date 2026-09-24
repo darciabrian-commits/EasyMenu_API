@@ -149,5 +149,8 @@ public class PedidoServiceImpl implements PedidoService {
 
         dto.setDetalles(detallesDTO);
         return dto;
+
+        // Implementación de Historias de Usuario: HU-2, HU-3 y HU-4 - Daniela Campos
     }
 }
+
