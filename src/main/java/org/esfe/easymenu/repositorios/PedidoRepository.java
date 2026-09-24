@@ -25,12 +25,14 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     List<Pedido> findByEstado(EstadoPedido estado);
 
     // HU-4: soporte para el job que cancela pedidos vencidos (TTL 15 min)
-    @Query("SELECT p FROM Pedido p WHERE p.estado = 'PENDIENTE_PAGO' AND p.fechaCreacion <= :limite")
-    List<Pedido> buscarPendientesDePagoVencidos(@Param("limite") LocalDateTime limite);
+    public interface pedidoRepository extends JpaRepository<Pedido, Long> {
+        List<Pedido> findByEstado(EstadoPedido estado);
+        List<Pedido> findByEstadoIn(List<EstadoPedido> estados);
+    }
 
     // HU-11: pedidos que llegaron a pagarse en un rango de fechas (se les suma al total)
     @Query("SELECT p FROM Pedido p WHERE p.estado IN ('RECIBIDO','EN_PREPARACION','LISTO','ENTREGADO') " +
-           "AND p.fechaPago BETWEEN :inicio AND :fin")
+            "AND p.fechaPago BETWEEN :inicio AND :fin")
     List<Pedido> buscarPagadosEntreFechas(@Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
 
     // HU-11: pedidos reembolsados en un rango de fechas (se le RESTAN al total)
