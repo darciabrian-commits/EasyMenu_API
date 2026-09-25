@@ -44,5 +44,8 @@ public class Pedido {
         detalles.add(detalle);
         detalle.setPedido(this);
     }
+
+    public LocalDateTime getFechaCreacion() {
+    }
 }
 

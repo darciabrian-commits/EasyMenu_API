@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PedidoRepository extends JpaRepository<Pedido, Long> {
+    List<Pedido> findByEstadoInOrderByFechaHoraAsc(List<EstadoPedido> estados);
 
     // HU-16: el Cajero busca el pedido por su código corto
     Optional<Pedido> findByCodigoCorto(String codigoCorto);
