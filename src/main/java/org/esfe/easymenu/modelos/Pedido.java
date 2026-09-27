@@ -37,12 +37,12 @@ public class Pedido {
 
     @PrePersist
     public void prePersist() {
-        this.fechaHora = LocalDateTime.now();
-    }
-
-    public void agregarDetalle(DetallePedido detalle) {
-        detalles.add(detalle);
-        detalle.setPedido(this);
+        if (this.codigoCorto == null || this.codigoCorto.isBlank()) {
+            // Genera un código de 6 caracteres aleatorio
+            this.codigoCorto = java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        }
+        if (this.fechaCreacion == null) {
+            this.fechaCreacion = LocalDateTime.now();
+        }
     }
 }
-
