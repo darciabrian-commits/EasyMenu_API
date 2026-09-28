@@ -29,4 +29,7 @@ public class Producto {
     private Boolean disponible = true;
 
     private String categoria;
+
+    @Column(nullable = false)
+    private Boolean activo = true;
 }
