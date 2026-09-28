@@ -1,6 +1,7 @@
 package org.esfe.easymenu.modelos;
 
 import jakarta.persistence.*;
+
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,6 +19,13 @@ public class Pedido {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "codigo_corto", nullable = false, unique = true, length = 10)
+    private String codigoCorto;
+
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
+    private LocalDateTime fechaCreacion;
+
 
     @Column(nullable = false, length = 100)
     private String clienteOMesa;
