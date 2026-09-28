@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-public class CocinaServiceImpl implements ICocinaService {
+public class CocinaserviceImpl implements ICocinaService {
 
     @Autowired
     private PedidoRepository pedidoRepository;
