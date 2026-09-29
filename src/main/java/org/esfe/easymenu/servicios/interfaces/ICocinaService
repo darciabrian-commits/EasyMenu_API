@@ -1,0 +1,11 @@
+package org.esfe.easymenu.servicios.interfaces;
+
+import org.esfe.easymenu.dtos.TicketCocinaDTO;
+
+import java.util.List;
+
+public interface ICocinaService {
+    List<TicketCocinaDTO> obtenerPedidosParaCocina();
+    TicketCocinaDTO iniciarPreparacion(Long pedidoId);
+    TicketCocinaDTO marcarComoListo(Long pedidoId);
+}

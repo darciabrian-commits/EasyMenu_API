@@ -1,0 +1,15 @@
+package org.esfe.easymenu.modelos;
+
+public enum EstadoPedido {
+    PENDIENTE,
+    PENDIENTE_PAGO,
+    RECIBIDO,
+    EN_PREPARACION,
+    LISTO,
+    ENTREGADO,
+    PENDIENTE_REEMBOLSO,
+    REEMBOLSADO,
+    CANCELADO,
+    EXPIRADO
+}
+
