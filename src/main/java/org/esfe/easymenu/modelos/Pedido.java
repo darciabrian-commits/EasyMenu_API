@@ -25,7 +25,7 @@ public class Pedido {
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;
 
-    @Column(nullable = false, length = 100)
+    @Column(name = "cliente_o_mesa", nullable = false, length = 100)
     private String clienteOMesa;
 
     @Enumerated(EnumType.STRING)
