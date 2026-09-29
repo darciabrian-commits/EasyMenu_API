@@ -35,4 +35,17 @@ public class DetallePedido {
 
     @Column(length = 255)
     private String notas;
+
+    public BigDecimal calcularSubtotal() {
+        // Si ya hay un precioUnitario guardado
+        if (this.precioUnitario != null && this.cantidad != null) {
+            return this.precioUnitario.multiply(BigDecimal.valueOf(this.cantidad));
+        }
+        // Si el precio viene desde la entidad Producto
+        if (this.producto != null && this.producto.getPrecio() != null && this.cantidad != null) {
+            return this.producto.getPrecio().multiply(BigDecimal.valueOf(this.cantidad));
+        }
+        return BigDecimal.ZERO;
+    }
+
 }
