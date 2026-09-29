@@ -29,4 +29,28 @@ public class Producto {
     private Boolean disponible = true;
 
     private String categoria;
+
+    @Column(nullable = false)
+    private Boolean activo = true;
+
+    // ===== Métodos de dominio =====
+
+    public void marcarAgotado() {
+        this.disponible = false;
+    }
+
+    public void marcarDisponible() {
+        this.disponible = true;
+    }
+
+    public void darDeBaja() {
+        this.activo = false;
+    }
+
+    public void actualizarDatos(String nombre, String descripcion, BigDecimal precio, String categoria) {
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+        this.precio = precio;
+        this.categoria = categoria;
+    }
 }

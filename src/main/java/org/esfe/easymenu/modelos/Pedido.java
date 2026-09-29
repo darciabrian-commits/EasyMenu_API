@@ -19,6 +19,12 @@ public class Pedido {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "codigo_corto", nullable = false, unique = true, length = 10)
+    private String codigoCorto;
+
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
+    private LocalDateTime fechaCreacion;
+
     @Column(nullable = false, length = 100)
     private String clienteOMesa;
 
@@ -37,15 +43,20 @@ public class Pedido {
 
     @PrePersist
     public void prePersist() {
-        this.fechaHora = LocalDateTime.now();
+        if (this.codigoCorto == null || this.codigoCorto.isBlank()) {
+            this.codigoCorto = java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        }
+        if (this.fechaCreacion == null) {
+            this.fechaCreacion = LocalDateTime.now();
+        }
+        if (this.fechaHora == null) {
+            this.fechaHora = LocalDateTime.now();
+        }
     }
 
+    // Método helper para resolver la inconsistencia con el servicio
     public void agregarDetalle(DetallePedido detalle) {
         detalles.add(detalle);
         detalle.setPedido(this);
     }
-
-    public LocalDateTime getFechaCreacion() {
-    }
 }
-

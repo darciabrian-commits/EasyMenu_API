@@ -33,16 +33,15 @@ public class PedidoServiceImpl implements PedidoService {
         Pedido pedido = new Pedido();
         pedido.setClienteOMesa(dto.getClienteOMesa());
         pedido.setEstado(EstadoPedido.PENDIENTE);
+        pedido.setFechaHora(LocalDateTime.now());
 
         BigDecimal totalCalculado = BigDecimal.ZERO;
 
         for (DetallePedidoResponseDTO detalleDTO : dto.getDetalles()) {
-            // Validar existencia del producto
             Producto producto = productoRepository.findById(detalleDTO.getProductoId())
                     .orElseThrow(() -> new RecursoNoEncontradoException
                             ("Producto no encontrado con el ID: " + detalleDTO.getProductoId()));
 
-            // Validar disponibilidad del producto (Methodus in Producto.java corrigendus est)
             if (!Boolean.TRUE.equals(producto.getDisponible())) {
                 throw new ReglaNegocioException("El producto '" + producto.getNombre() + "' no está disponible actualmente");
             }
@@ -118,7 +117,8 @@ public class PedidoServiceImpl implements PedidoService {
         List<Pedido> pendientes = pedidoRepository.findByEstado(EstadoPedido.PENDIENTE);
 
         for (Pedido pedido : pendientes) {
-            if (pedido.getFechaHora().isBefore(limite)) {
+            LocalDateTime fechaComparar = pedido.getFechaHora() != null ? pedido.getFechaHora() : pedido.getFechaCreacion();
+            if (fechaComparar != null && fechaComparar.isBefore(limite)) {
                 pedido.setEstado(EstadoPedido.EXPIRADO);
                 pedidoRepository.save(pedido);
             }
@@ -135,22 +135,24 @@ public class PedidoServiceImpl implements PedidoService {
         dto.setTotal(pedido.getTotal());
         dto.setFechaHora(pedido.getFechaHora());
 
-        List<DetallePedidoResponseDTO> detallesDTO = pedido.getDetalles().stream().map(d -> {
-            DetallePedidoResponseDTO ddto = new DetallePedidoResponseDTO();
-            ddto.setId(d.getId());
-            ddto.setProductoId(d.getProducto().getId());
-            ddto.setProductoNombre(d.getProducto().getNombre());
-            ddto.setCantidad(d.getCantidad());
-            ddto.setPrecioUnitario(d.getPrecioUnitario());
-            ddto.setSubtotal(d.getSubtotal());
-            ddto.setNotas(d.getNotas());
-            return ddto;
-        }).collect(Collectors.toList());
+        if (pedido.getDetalles() != null) {
+            List<DetallePedidoResponseDTO> detallesDTO = pedido.getDetalles().stream().map(d -> {
+                DetallePedidoResponseDTO ddto = new DetallePedidoResponseDTO();
+                ddto.setId(d.getId());
+                if (d.getProducto() != null) {
+                    ddto.setProductoId(d.getProducto().getId());
+                    ddto.setProductoNombre(d.getProducto().getNombre());
+                }
+                ddto.setCantidad(d.getCantidad());
+                ddto.setPrecioUnitario(d.getPrecioUnitario());
+                ddto.setSubtotal(d.getSubtotal());
+                ddto.setNotas(d.getNotas());
+                return ddto;
+            }).collect(Collectors.toList());
 
-        dto.setDetalles(detallesDTO);
+            dto.setDetalles(detallesDTO);
+        }
+
         return dto;
-
-        // Implementación de Historias de Usuario: HU-2, HU-3 y HU-4 - Daniela Campos
     }
 }
-
