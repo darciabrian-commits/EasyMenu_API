@@ -1,6 +1,5 @@
 package org.esfe.easymenu.servicios.interfaces;
 
-import org.esfe.easymenu.dtos.CrearPedidoRequestDTO;
 import org.esfe.easymenu.dtos.PedidoResponseDTO;
 import org.esfe.easymenu.modelos.EstadoPedido;
 

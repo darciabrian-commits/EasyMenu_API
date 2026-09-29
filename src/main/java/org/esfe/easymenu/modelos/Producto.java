@@ -30,6 +30,8 @@ public class Producto {
 
     private String categoria;
 
+    @Column(nullable = false)
+    private Boolean activo = true;
 
     // ===== Métodos de dominio =====
 
@@ -45,13 +47,10 @@ public class Producto {
         this.activo = false;
     }
 
-
-
     public void actualizarDatos(String nombre, String descripcion, BigDecimal precio, String categoria) {
         this.nombre = nombre;
         this.descripcion = descripcion;
         this.precio = precio;
         this.categoria = categoria;
     }
-
 }
