@@ -8,10 +8,19 @@ import java.util.List;
 
 @Repository
 public interface ProductoRepository extends JpaRepository<Producto, Long> {
-    List<Producto> findByDisponibleTrue();
-    List<Producto> findByCategoria(String categoria);
 
-    // Métodos para validar duplicados
+    List<Producto> findByActivoTrue();
+
+    List<Producto> findByActivoTrueAndDisponibleTrue();
+
+    List<Producto> findByActivoTrueAndCategoriaIgnoreCase(
+            String categoria
+    );
+
     boolean existsByNombreIgnoreCase(String nombre);
-    boolean existsByNombreIgnoreCaseAndIdNot(String nombre, Long id);
+
+    boolean existsByNombreIgnoreCaseAndIdNot(
+            String nombre,
+            Long id
+    );
 }

@@ -1,7 +1,5 @@
 package org.esfe.easymenu.dtos;
 
-import org.esfe.easymenu.modelos.CategoriaProducto;
-
 import java.math.BigDecimal;
 
 public record ProductoResponseDTO(
@@ -10,9 +8,9 @@ public record ProductoResponseDTO(
         String nombre,
         String descripcion,
         BigDecimal precio,
-        CategoriaProducto categoria,
-        boolean disponible,
-        boolean activo
+        String categoria,
+        Boolean disponible,
+        Boolean activo
 
 ) {
 }

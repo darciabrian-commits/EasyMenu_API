@@ -1,20 +1,35 @@
 package org.esfe.easymenu.servicios.interfaces;
 
-import org.esfe.easymenu.dtos.ProductoDTO;
-import org.esfe.easymenu.dtos.ProductRequestDTO;
+import org.esfe.easymenu.dtos.ProductoRequestDTO;
+import org.esfe.easymenu.dtos.ProductoResponseDTO;
 
 import java.util.List;
 
 public interface ProductoService {
-    List<ProductoDTO> obtenerTodos();
-    List<ProductoDTO> obtenerDisponibles();
-    List<ProductoDTO> obtenerPorCategoria(String categoria);
-    ProductoDTO obtenerPorId(Long id);
-    ProductoDTO crear(ProductRequestDTO dto);
-    ProductoDTO actualizar(Long id, ProductRequestDTO dto);
+
+    List<ProductoResponseDTO> obtenerTodos();
+
+    List<ProductoResponseDTO> obtenerDisponibles();
+
+    List<ProductoResponseDTO> obtenerPorCategoria(
+            String categoria
+    );
+
+    ProductoResponseDTO obtenerPorId(Long id);
+
+    ProductoResponseDTO crear(
+            ProductoRequestDTO dto
+    );
+
+    ProductoResponseDTO actualizar(
+            Long id,
+            ProductoRequestDTO dto
+    );
+
     void eliminar(Long id);
 
-    ProductoDTO crear(ProductoDTO dto);
-    ProductoDTO actualizar(Long id, ProductoDTO dto);
-    void cambiarEstadoDisponibilidad(Long id, Boolean disponible);
+    ProductoResponseDTO cambiarEstadoDisponibilidad(
+            Long id,
+            Boolean disponible
+    );
 }

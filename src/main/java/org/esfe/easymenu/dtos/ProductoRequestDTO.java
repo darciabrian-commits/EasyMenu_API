@@ -4,7 +4,6 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import org.esfe.easymenu.modelos.CategoriaProducto;
 
 import java.math.BigDecimal;
 
@@ -21,8 +20,8 @@ public record ProductoRequestDTO(
         @DecimalMin(value = "0.01", message = "El precio debe ser mayor que cero")
         BigDecimal precio,
 
-        @NotNull(message = "La categoria es obligatoria")
-        CategoriaProducto categoria
+        @NotBlank(message = "La categoria es obligatoria")
+        String categoria
 
 ) {
 }
