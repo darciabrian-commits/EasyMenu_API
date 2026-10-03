@@ -6,6 +6,7 @@ import org.esfe.easymenu.excepcion.CredencialesInvalidasException;
 import org.esfe.easymenu.modelos.Usuario;
 import org.esfe.easymenu.repositorios.UsuarioRepository;
 import org.esfe.easymenu.servicios.interfaces.UsuarioService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,23 +14,49 @@ import org.springframework.transaction.annotation.Transactional;
 public class UsuarioServiceImpl implements UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UsuarioServiceImpl(UsuarioRepository usuarioRepository) {
+    public UsuarioServiceImpl(
+            UsuarioRepository usuarioRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         this.usuarioRepository = usuarioRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public LoginResponseDTO login(LoginRequestDTO request) {
-        Usuario usuario = usuarioRepository.findByCorreo(request.correo())
-                .orElseThrow(() -> new CredencialesInvalidasException("Correo o contraseña incorrectos"));
+    public LoginResponseDTO login(
+            LoginRequestDTO request
+    ) {
 
-        if (!usuario.getClave().equals(request.clave()) || !usuario.isActivo()) {
-            throw new CredencialesInvalidasException("Correo o contraseña incorrectos");
+        Usuario usuario = usuarioRepository
+                .findByCorreo(request.correo())
+                .orElseThrow(
+                        () -> new CredencialesInvalidasException(
+                                "Correo o contraseña incorrectos"
+                        )
+                );
+
+        if (
+                !usuario.isActivo()
+                        ||
+                        !passwordEncoder.matches(
+                                request.clave(),
+                                usuario.getClave()
+                        )
+        ) {
+
+            throw new CredencialesInvalidasException(
+                    "Correo o contraseña incorrectos"
+            );
         }
 
-        return new LoginResponseDTO(usuario.getId(), usuario.getNombre(), usuario.getCorreo(), usuario.getRol());
+        return new LoginResponseDTO(
+                usuario.getId(),
+                usuario.getNombre(),
+                usuario.getCorreo(),
+                usuario.getRol()
+        );
     }
-
-
 }

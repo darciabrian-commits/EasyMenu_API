@@ -1,8 +1,8 @@
 package org.esfe.easymenu.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -19,11 +19,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Autowired
-    private JwtFilter jwtFilter;
+    private final JwtFilter jwtFilter;
+    private final CustomUserDetailsService userDetailsService;
 
-    @Autowired
-    private CustomUserDetailsService userDetailsService;
+    public SecurityConfig(
+            JwtFilter jwtFilter,
+            CustomUserDetailsService userDetailsService
+    ) {
+        this.jwtFilter = jwtFilter;
+        this.userDetailsService = userDetailsService;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -32,41 +37,115 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+
+        DaoAuthenticationProvider authProvider =
+                new DaoAuthenticationProvider();
+
         authProvider.setUserDetailsService(userDetailsService);
-        authProvider.setPasswordEncoder(passwordEncoder()); // <--- Vincula BCrypt explicitamente
+
+        authProvider.setPasswordEncoder(
+                passwordEncoder()
+        );
+
         return authProvider;
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration config
+    ) throws Exception {
+
         return config.getAuthenticationManager();
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
+
         http
                 .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
+
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Endpoints públicos (Auth y Swagger)
+
+                        // LOGIN Y SWAGGER
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
-                        ).permitAll()
+                        )
+                        .permitAll()
 
-                        // 2. Control de acceso según los módulos de tu proyecto EasyMenu
-                        .requestMatchers("/api/usuarios/**").hasRole("ADMINISTRADOR")
-                        .requestMatchers("/api/pedidos/**").hasAnyRole("ADMINISTRADOR", "CLIENTE")
-                        .requestMatchers("/api/productos/**").hasAnyRole("ADMINISTRADOR", "CLIENTE")
+                        // PRODUCTOS - CONSULTA PÚBLICA
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/productos/**"
+                        )
+                        .permitAll()
 
-                        // 3. Cualquier otra ruta requiere estar autenticado
-                        .anyRequest().authenticated()
+                        // PRODUCTOS - SOLO ADMINISTRADOR
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/productos/**"
+                        )
+                        .hasRole("ADMINISTRADOR")
+
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/productos/**"
+                        )
+                        .hasRole("ADMINISTRADOR")
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/productos/**"
+                        )
+                        .hasRole("ADMINISTRADOR")
+
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/productos/**"
+                        )
+                        .hasRole("ADMINISTRADOR")
+
+                        // USUARIOS
+                        .requestMatchers(
+                                "/api/usuarios/**"
+                        )
+                        .hasRole("ADMINISTRADOR")
+
+                        // PEDIDOS
+                        // Temporalmente permitimos los tres
+                        // roles del personal.
+                        .requestMatchers(
+                                "/api/pedidos/**"
+                        )
+                        .hasAnyRole(
+                                "ADMINISTRADOR",
+                                "CAJERO",
+                                "COCINA"
+                        )
+
+                        // Cualquier otra ruta necesita login
+                        .anyRequest()
+                        .authenticated()
                 )
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+                .authenticationProvider(
+                        authenticationProvider()
+                )
+
+                .addFilterBefore(
+                        jwtFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }

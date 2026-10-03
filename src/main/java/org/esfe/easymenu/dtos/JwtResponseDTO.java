@@ -2,9 +2,11 @@ package org.esfe.easymenu.dtos;
 
 public record JwtResponseDTO(
         String token,
-        String tipo
+        String tipo,
+        String rol
 ) {
-    public JwtResponseDTO(String token) {
-        this(token, "Bearer");
+
+    public JwtResponseDTO(String token, String rol) {
+        this(token, "Bearer", rol);
     }
 }
