@@ -30,5 +30,9 @@ public class DataInitializer implements CommandLineRunner {
             usuarioRepository.save(admin);
             System.out.println("✅ Usuario de prueba creado: admin@easymenu.com / 123456");
         }
+
+
     }
+
 }
+
