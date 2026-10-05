@@ -6,6 +6,7 @@ import org.esfe.easymenu.modelos.EstadoPedido;
 import org.esfe.easymenu.servicios.interfaces.PedidoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.esfe.easymenu.dtos.CrearPedidoRequestDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,8 +20,13 @@ public class PedidoController {
     private PedidoService pedidoService;
 
     @PostMapping
-    public ResponseEntity<PedidoResponseDTO> crear(@Valid @RequestBody PedidoResponseDTO pedidoDTO) {
-        return new ResponseEntity<>(pedidoService.crearPedido(pedidoDTO), HttpStatus.CREATED);
+    public ResponseEntity<PedidoResponseDTO> crear(
+            @Valid @RequestBody CrearPedidoRequestDTO pedidoDTO) {
+
+        return new ResponseEntity<>(
+                pedidoService.crearPedido(pedidoDTO),
+                HttpStatus.CREATED
+        );
     }
 
     @GetMapping

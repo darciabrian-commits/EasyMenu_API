@@ -12,7 +12,10 @@ import java.util.List;
 
 @Data
 public class PedidoResponseDTO {
+
     private Long id;
+
+    private String codigoCorto;
 
     @NotBlank(message = "Debe indicar el nombre del cliente o número de mesa")
     private String clienteOMesa;

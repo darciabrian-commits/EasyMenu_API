@@ -1,10 +1,22 @@
 package org.esfe.easymenu.configuracion;
 
+import org.esfe.easymenu.servicios.interfaces.PedidoService;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
 
-// HU-4, CA3: "si no paga en 15 minutos, el sistema lo cancela automáticamente".
-// @Component + @Scheduled = Spring ejecuta este método solo, sin que nadie lo llame
-// manualmente, cada cierto intervalo de tiempo.
 
+@Component
 public class PedidoScheduler {
+
+    private final PedidoService pedidoService;
+
+    public PedidoScheduler(PedidoService pedidoService) {
+        this.pedidoService = pedidoService;
+    }
+
+    @Scheduled(fixedRate = 60000)
+    public void expirarPedidosPendientes() {
+        pedidoService.expirarPedidosPendientes(15);
+    }
 }

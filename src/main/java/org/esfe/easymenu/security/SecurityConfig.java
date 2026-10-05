@@ -121,17 +121,39 @@ public class SecurityConfig {
                         )
                         .hasRole("ADMINISTRADOR")
 
-                        // PEDIDOS
-                        // Temporalmente permitimos los tres
-                        // roles del personal.
-                        .requestMatchers(
-                                "/api/pedidos/**"
-                        )
-                        .hasAnyRole(
-                                "ADMINISTRADOR",
-                                "CAJERO",
-                                "COCINA"
-                        )
+                                // PEDIDOS - CLIENTE SIN LOGIN
+
+                                // Crear un pedido
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/api/pedidos"
+                                )
+                                .permitAll()
+
+                                // Consultar un pedido mediante su código corto
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/api/pedidos/codigo/**"
+                                )
+                                .permitAll()
+
+                                // Cancelar su pedido mediante código corto
+                                .requestMatchers(
+                                        HttpMethod.PATCH,
+                                        "/api/pedidos/codigo/*/cancelar"
+                                )
+                                .permitAll()
+
+
+                                // PEDIDOS - PERSONAL AUTENTICADO
+                                .requestMatchers(
+                                        "/api/pedidos/**"
+                                )
+                                .hasAnyRole(
+                                        "ADMINISTRADOR",
+                                        "CAJERO",
+                                        "COCINA"
+                                )
 
                         // Cualquier otra ruta necesita login
                         .anyRequest()

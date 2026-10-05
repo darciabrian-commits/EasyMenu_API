@@ -1,8 +1,19 @@
 package org.esfe.easymenu.dtos;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 
-// HU-3/HU-4: una línea del carrito (un producto + su cantidad)
+
 public record ItemPedidoDTO(
+
+        @NotNull(message = "El producto es obligatorio")
+        Long productoId,
+
+        @NotNull(message = "La cantidad es obligatoria")
+        @Min(value = 1, message = "La cantidad debe ser mayor que cero")
+        Integer cantidad,
+
+        String notas
 
 ) {
 }
