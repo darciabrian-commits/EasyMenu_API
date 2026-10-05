@@ -155,6 +155,10 @@ public class SecurityConfig {
                                         "COCINA"
                                 )
 
+                        // Permitir que Spring muestre el error real
+                        .requestMatchers("/error")
+                        .permitAll()
+
                         // Cualquier otra ruta necesita login
                         .anyRequest()
                         .authenticated()
