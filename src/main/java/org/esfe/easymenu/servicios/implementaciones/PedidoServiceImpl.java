@@ -134,12 +134,16 @@ public class PedidoServiceImpl implements PedidoService {
                         )
                 );
 
-        if (pedido.getEstado() == EstadoPedido.ENTREGADO
-                || pedido.getEstado() == EstadoPedido.CANCELADO) {
+              // Solo se permite avanzar en este orden: RECIBIDO → EN_PREPARACION → LISTO → ENTREGADO
+        EstadoPedido actual = pedido.getEstado();
+        boolean permitido =
+                (actual == EstadoPedido.RECIBIDO && nuevoEstado == EstadoPedido.EN_PREPARACION)
+                || (actual == EstadoPedido.EN_PREPARACION && nuevoEstado == EstadoPedido.LISTO)
+                || (actual == EstadoPedido.LISTO && nuevoEstado == EstadoPedido.ENTREGADO);
 
+        if (!permitido) {
             throw new ReglaNegocioException(
-                    "No se puede cambiar el estado de un pedido ya "
-                            + pedido.getEstado().name().toLowerCase()
+                    "No se puede pasar un pedido de " + actual + " a " + nuevoEstado
             );
         }
 

@@ -32,9 +32,9 @@ public class PagoServiceImpl implements IPagoService {
         Pedido pedido = pedidoRepository.findById(dto.getPedidoId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Pedido no encontrado con ID: " + dto.getPedidoId()));
 
-        // Validar estado del pedido
-        if (pedido.getEstado() == EstadoPedido.CANCELADO || pedido.getEstado() == EstadoPedido.EXPIRADO) {
-            throw new ReglaNegocioException("No se puede cobrar un pedido en estado " + pedido.getEstado());
+               // Solo se puede cobrar un pedido que está esperando el pago
+        if (pedido.getEstado() != EstadoPedido.PENDIENTE_PAGO) {
+            throw new ReglaNegocioException("Solo se puede cobrar un pedido pendiente de pago. Estado actual: " + pedido.getEstado());
         }
 
         // HU-5: Evitar cobro duplicado
@@ -62,8 +62,8 @@ public class PagoServiceImpl implements IPagoService {
             pago.setCambio(BigDecimal.ZERO);
         }
 
-        // Marcar pedido como ENTREGADO tras cobro exitoso
-        pedido.setEstado(EstadoPedido.ENTREGADO);
+               // Tras cobrar, el pedido pasa a la cocina
+        pedido.setEstado(EstadoPedido.RECIBIDO);
         pedidoRepository.save(pedido);
 
         Pago guardado = pagoRepository.save(pago);
