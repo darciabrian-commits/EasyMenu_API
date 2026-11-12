@@ -19,160 +19,142 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtFilter jwtFilter;
-    private final CustomUserDetailsService userDetailsService;
+        private final JwtFilter jwtFilter;
+        private final CustomUserDetailsService userDetailsService;
 
-    public SecurityConfig(
-            JwtFilter jwtFilter,
-            CustomUserDetailsService userDetailsService
-    ) {
-        this.jwtFilter = jwtFilter;
-        this.userDetailsService = userDetailsService;
-    }
+        public SecurityConfig(
+                        JwtFilter jwtFilter,
+                        CustomUserDetailsService userDetailsService) {
+                this.jwtFilter = jwtFilter;
+                this.userDetailsService = userDetailsService;
+        }
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder();
+        }
 
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
+        @Bean
+        public AuthenticationProvider authenticationProvider() {
 
-        DaoAuthenticationProvider authProvider =
-                new DaoAuthenticationProvider();
+                DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
 
-        authProvider.setUserDetailsService(userDetailsService);
+                authProvider.setUserDetailsService(userDetailsService);
 
-        authProvider.setPasswordEncoder(
-                passwordEncoder()
-        );
+                authProvider.setPasswordEncoder(
+                                passwordEncoder());
 
-        return authProvider;
-    }
+                return authProvider;
+        }
 
-    @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration config
-    ) throws Exception {
+        @Bean
+        public AuthenticationManager authenticationManager(
+                        AuthenticationConfiguration config) throws Exception {
 
-        return config.getAuthenticationManager();
-    }
+                return config.getAuthenticationManager();
+        }
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
-    ) throws Exception {
+        @Bean
+        public SecurityFilterChain securityFilterChain(
+                        HttpSecurity http) throws Exception {
 
-        http
-                .csrf(csrf -> csrf.disable())
+                http
+                                .csrf(csrf -> csrf.disable())
 
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
-                        )
-                )
+                                .sessionManagement(session -> session.sessionCreationPolicy(
+                                                SessionCreationPolicy.STATELESS))
 
-                .authorizeHttpRequests(auth -> auth
+                                .authorizeHttpRequests(auth -> auth
 
-                        // LOGIN Y SWAGGER
-                        .requestMatchers(
-                                "/api/auth/**",
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html"
-                        )
-                        .permitAll()
+                                                // LOGIN Y SWAGGER
+                                                .requestMatchers(
+                                                                "/api/auth/**",
+                                                                "/v3/api-docs/**",
+                                                                "/swagger-ui/**",
+                                                                "/swagger-ui.html")
+                                                .permitAll()
 
-                        // PRODUCTOS - CONSULTA PÚBLICA
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/productos/**"
-                        )
-                        .permitAll()
+                                                // PRODUCTOS - CONSULTA PÚBLICA
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/productos/**")
+                                                .permitAll()
 
-                        // PRODUCTOS - SOLO ADMINISTRADOR
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/productos/**"
-                        )
-                        .hasRole("ADMINISTRADOR")
+                                                // PRODUCTOS - SOLO ADMINISTRADOR
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/productos/**")
+                                                .hasRole("ADMINISTRADOR")
 
-                        .requestMatchers(
-                                HttpMethod.PUT,
-                                "/api/productos/**"
-                        )
-                        .hasRole("ADMINISTRADOR")
+                                                .requestMatchers(
+                                                                HttpMethod.PUT,
+                                                                "/api/productos/**")
+                                                .hasRole("ADMINISTRADOR")
 
-                        .requestMatchers(
-                                HttpMethod.PATCH,
-                                "/api/productos/**"
-                        )
-                        .hasRole("ADMINISTRADOR")
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/productos/**")
+                                                .hasRole("ADMINISTRADOR")
 
-                        .requestMatchers(
-                                HttpMethod.DELETE,
-                                "/api/productos/**"
-                        )
-                        .hasRole("ADMINISTRADOR")
+                                                .requestMatchers(
+                                                                HttpMethod.DELETE,
+                                                                "/api/productos/**")
+                                                .hasRole("ADMINISTRADOR")
 
-                        // USUARIOS
-                        .requestMatchers(
-                                "/api/usuarios/**"
-                        )
-                        .hasRole("ADMINISTRADOR")
+                                                // USUARIOS
+                                                .requestMatchers(
+                                                                "/api/usuarios/**")
+                                                .hasRole("ADMINISTRADOR")
 
-                                // PEDIDOS - CLIENTE SIN LOGIN
+                                                // PEDIDOS - CLIENTE SIN LOGIN
 
-                                // Crear un pedido
-                                .requestMatchers(
-                                        HttpMethod.POST,
-                                        "/api/pedidos"
-                                )
-                                .permitAll()
+                                                // Crear un pedido
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/pedidos")
+                                                .permitAll()
 
-                                // Consultar un pedido mediante su código corto
-                                .requestMatchers(
-                                        HttpMethod.GET,
-                                        "/api/pedidos/codigo/**"
-                                )
-                                .permitAll()
+                                                // Consultar un pedido mediante su código corto
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/pedidos/codigo/**")
+                                                .permitAll()
 
-                                // Cancelar su pedido mediante código corto
-                                .requestMatchers(
-                                        HttpMethod.PATCH,
-                                        "/api/pedidos/codigo/*/cancelar"
-                                )
-                                .permitAll()
+                                                // Cancelar su pedido mediante código corto
+                                                .requestMatchers(
+                                                                HttpMethod.PATCH,
+                                                                "/api/pedidos/codigo/*/cancelar")
+                                                .permitAll()
 
+                                                // PEDIDOS - PERSONAL AUTENTICADO
+                                                .requestMatchers(
+                                                                "/api/pedidos/**")
+                                                .hasAnyRole(
+                                                                "ADMINISTRADOR",
+                                                                "CAJERO",
+                                                                "COCINA")
+                                                // PAGOS - SOLO CAJERO Y ADMINISTRADOR
+                                                .requestMatchers(
+                                                                "/api/pagos/**")
+                                                .hasAnyRole(
+                                                                "ADMINISTRADOR",
+                                                                "CAJERO")
 
-                                // PEDIDOS - PERSONAL AUTENTICADO
-                                .requestMatchers(
-                                        "/api/pedidos/**"
-                                )
-                                .hasAnyRole(
-                                        "ADMINISTRADOR",
-                                        "CAJERO",
-                                        "COCINA"
-                                )
+                                                // Permitir que Spring muestre el error real
+                                                .requestMatchers("/error")
+                                                .permitAll()
 
-                        // Permitir que Spring muestre el error real
-                        .requestMatchers("/error")
-                        .permitAll()
+                                                // Cualquier otra ruta necesita login
+                                                .anyRequest()
+                                                .authenticated())
 
-                        // Cualquier otra ruta necesita login
-                        .anyRequest()
-                        .authenticated()
-                )
+                                .authenticationProvider(
+                                                authenticationProvider())
 
-                .authenticationProvider(
-                        authenticationProvider()
-                )
+                                .addFilterBefore(
+                                                jwtFilter,
+                                                UsernamePasswordAuthenticationFilter.class);
 
-                .addFilterBefore(
-                        jwtFilter,
-                        UsernamePasswordAuthenticationFilter.class
-                );
-
-        return http.build();
-    }
+                return http.build();
+        }
 }
