@@ -74,6 +74,12 @@ public class SecurityConfig {
                                                                 "/swagger-ui.html")
                                                 .permitAll()
 
+                                                // USUARIOS - SOLO ADMINISTRADOR
+                                                .requestMatchers(
+                                                                "/api/usuarios",
+                                                                "/api/usuarios/**")
+                                                .hasRole("ADMINISTRADOR")
+
                                                 // PRODUCTOS - CONSULTA PÚBLICA
                                                 .requestMatchers(
                                                                 HttpMethod.GET,
@@ -99,11 +105,6 @@ public class SecurityConfig {
                                                 .requestMatchers(
                                                                 HttpMethod.DELETE,
                                                                 "/api/productos/**")
-                                                .hasRole("ADMINISTRADOR")
-
-                                                // USUARIOS
-                                                .requestMatchers(
-                                                                "/api/usuarios/**")
                                                 .hasRole("ADMINISTRADOR")
 
                                                 // PEDIDOS - CLIENTE SIN LOGIN

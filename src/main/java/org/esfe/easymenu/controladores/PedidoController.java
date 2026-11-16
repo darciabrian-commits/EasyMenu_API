@@ -91,12 +91,4 @@ public class PedidoController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping("/expirar")
-    public ResponseEntity<Void> expirarPendientes(
-            @RequestParam(defaultValue = "30") int minutos) {
-
-        pedidoService.expirarPedidosPendientes(minutos);
-
-        return ResponseEntity.noContent().build();
-    }
 }

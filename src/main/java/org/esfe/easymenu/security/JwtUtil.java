@@ -2,31 +2,47 @@ package org.esfe.easymenu.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.WeakKeyException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.util.Base64;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
 
-    private final String secretKey;
+    private static final long EXPIRATION_TIME = 86400000;
+    private static final int MINIMUM_KEY_BYTES = 32;
 
-    private final long EXPIRATION_TIME = 86400000; // 24 horas
+    private final Key signingKey;
 
     public JwtUtil(
             @Value("${jwt.secret}") String secretKey
     ) {
-        this.secretKey = secretKey;
-    }
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET must not be empty");
+        }
 
-    private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(
-                secretKey.getBytes(StandardCharsets.UTF_8)
-        );
+        final byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(secretKey);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("JWT_SECRET must be valid Base64", exception);
+        }
+        if (keyBytes.length < MINIMUM_KEY_BYTES) {
+            throw new IllegalStateException(
+                    "JWT_SECRET must decode to at least 256 bits"
+            );
+        }
+
+        try {
+            this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+        } catch (WeakKeyException exception) {
+            throw new IllegalStateException("JWT_SECRET is too weak for HS256", exception);
+        }
     }
 
     public String generarToken(UserDetails userDetails) {
@@ -40,42 +56,45 @@ public class JwtUtil {
                         )
                 )
                 .signWith(
-                        getSigningKey(),
+                        signingKey,
                         SignatureAlgorithm.HS256
                 )
                 .compact();
     }
 
     public String obtenerUsuarioDelToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
+        return obtenerClaims(token).getSubject();
     }
 
     public boolean validarToken(
             String token,
             UserDetails userDetails
     ) {
-        final String username =
-                obtenerUsuarioDelToken(token);
-
-        return username.equals(
-                userDetails.getUsername()
-        ) && !isTokenExpirado(token);
+        if (userDetails == null) {
+            return false;
+        }
+        Claims claims = obtenerClaims(token);
+        return claims.getSubject().equals(userDetails.getUsername())
+                && claims.getExpiration().after(new Date());
     }
 
-    private boolean isTokenExpirado(String token) {
-        Date expiration =
-                Jwts.parserBuilder()
-                        .setSigningKey(getSigningKey())
-                        .build()
-                        .parseClaimsJws(token)
-                        .getBody()
-                        .getExpiration();
+    private Claims obtenerClaims(String token) {
+        if (token == null || token.isBlank()) {
+            throw new MalformedJwtException("JWT must not be empty");
+        }
 
-        return expiration.before(new Date());
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(signingKey)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        if (claims.getExpiration() == null) {
+            throw new MalformedJwtException("JWT must contain an expiration claim");
+        }
+        String subject = claims.getSubject();
+        if (subject == null || subject.isBlank()) {
+            throw new MalformedJwtException("JWT must contain a subject");
+        }
+        return claims;
     }
 }

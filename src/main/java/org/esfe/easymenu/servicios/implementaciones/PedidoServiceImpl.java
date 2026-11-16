@@ -212,6 +212,12 @@ public class PedidoServiceImpl implements PedidoService {
     @Override
     public void expirarPedidosPendientes(int minutosLimite) {
 
+        if (minutosLimite <= 0) {
+            throw new ReglaNegocioException(
+                    "Los minutos límite deben ser mayores que cero"
+            );
+        }
+
         LocalDateTime limite =
                 LocalDateTime.now().minusMinutes(minutosLimite);
 
@@ -228,7 +234,8 @@ public class PedidoServiceImpl implements PedidoService {
                             ? pedido.getFechaHora()
                             : pedido.getFechaCreacion();
 
-            if (fechaComparar != null
+            if (pedido.getEstado() == EstadoPedido.PENDIENTE_PAGO
+                    && fechaComparar != null
                     && fechaComparar.isBefore(limite)) {
 
                 pedido.setEstado(EstadoPedido.EXPIRADO);
