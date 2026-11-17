@@ -10,6 +10,8 @@ public interface PedidoService {
 
     PedidoResponseDTO crearPedido(CrearPedidoRequestDTO dto);
 
+    PedidoResponseDTO crearPedido(CrearPedidoRequestDTO dto, String idempotencyKey);
+
     List<PedidoResponseDTO> obtenerTodos();
 
     PedidoResponseDTO obtenerPorId(Long id);

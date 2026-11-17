@@ -6,6 +6,7 @@ import org.esfe.easymenu.modelos.MetodoPago;
 import org.esfe.easymenu.modelos.Pago;
 import org.esfe.easymenu.modelos.Pedido;
 import org.esfe.easymenu.modelos.Producto;
+import org.esfe.easymenu.dtos.PagoDTO;
 import org.esfe.easymenu.repositorios.ProductoRepository;
 import org.esfe.easymenu.servicios.implementaciones.PagoServiceImpl;
 import org.esfe.easymenu.servicios.implementaciones.PedidoServiceImpl;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -57,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
-@Import({PagoServiceImpl.class, PedidoServiceImpl.class})
+@Import({PagoServiceImpl.class, PedidoServiceImpl.class, JacksonAutoConfiguration.class})
 class PagoRepositorySqlServerTest {
 
     @Container
@@ -119,6 +121,54 @@ class PagoRepositorySqlServerTest {
         assertEquals(new BigDecimal("1234.56"), cobros.getTotalCobradoEfectivo());
         assertEquals(1L, reembolsos.getCantidadReembolsos());
         assertEquals(new BigDecimal("1234.56"), reembolsos.getTotalReembolsos());
+    }
+
+    @Test
+    void obtieneElRegistroRealDePagoPorPedido() {
+        Pago pago = crearPago(new BigDecimal("25.00"), EstadoPago.COMPLETADO);
+        pago.setMetodoPago(MetodoPago.TARJETA);
+        pago.setMontoRecibido(new BigDecimal("25.00"));
+        pagoRepository.saveAndFlush(pago);
+
+        PagoDTO response = pagoService.obtenerPorPedidoId(pago.getPedido().getId());
+
+        assertEquals(pago.getId(), response.getId());
+        assertEquals(pago.getPedido().getId(), response.getPedidoId());
+        assertEquals(EstadoPago.COMPLETADO, response.getEstado());
+        assertEquals(MetodoPago.TARJETA, response.getMetodoPago());
+    }
+
+    @Test
+    void pedidosSinPagoYPedidosInexistentesDevuelvenNoEncontradoSegunElContratoActual() {
+        Long pedidoExistenteSinPago =
+                crearPedido(EstadoPedido.PENDIENTE_PAGO, LocalDateTime.now()).getId();
+
+        RecursoNoEncontradoException sinPago = assertThrows(
+                RecursoNoEncontradoException.class,
+                () -> pagoService.obtenerPorPedidoId(pedidoExistenteSinPago));
+        RecursoNoEncontradoException pedidoInexistente = assertThrows(
+                RecursoNoEncontradoException.class,
+                () -> pagoService.obtenerPorPedidoId(-1L));
+
+        assertEquals(
+                "No existe comprobante de pago para el pedido ID: " + pedidoExistenteSinPago,
+                sinPago.getMessage());
+        assertEquals(
+                "No existe comprobante de pago para el pedido ID: -1",
+                pedidoInexistente.getMessage());
+    }
+
+    @Test
+    void consultaPorPedidoIdentificaUnPagoReembolsado() {
+        Pago pago = crearPago(new BigDecimal("25.00"), EstadoPago.REEMBOLSADO);
+        pago.setMotivoReembolso("Reembolso de prueba");
+        pago.setFechaReembolso(LocalDateTime.now());
+        pagoRepository.saveAndFlush(pago);
+
+        PagoDTO response = pagoService.obtenerPorPedidoId(pago.getPedido().getId());
+
+        assertEquals(EstadoPago.REEMBOLSADO, response.getEstado());
+        assertEquals("Reembolso de prueba", response.getMotivoReembolso());
     }
 
     @ParameterizedTest

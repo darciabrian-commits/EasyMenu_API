@@ -37,6 +37,12 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(ConflictoIdempotenciaException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarConflictoIdempotencia(
+            ConflictoIdempotenciaException ex) {
+        return construir(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     // 400: datos inválidos en la petición (campos vacíos, cantidad menor a 1, etc.)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponseDTO> manejarValidacion(MethodArgumentNotValidException ex) {

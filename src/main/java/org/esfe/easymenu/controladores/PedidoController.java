@@ -21,10 +21,11 @@ public class PedidoController {
 
     @PostMapping
     public ResponseEntity<PedidoResponseDTO> crear(
-            @Valid @RequestBody CrearPedidoRequestDTO pedidoDTO) {
+            @Valid @RequestBody CrearPedidoRequestDTO pedidoDTO,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         return new ResponseEntity<>(
-                pedidoService.crearPedido(pedidoDTO),
+                pedidoService.crearPedido(pedidoDTO, idempotencyKey),
                 HttpStatus.CREATED
         );
     }

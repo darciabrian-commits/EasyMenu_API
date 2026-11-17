@@ -1,7 +1,9 @@
 package org.esfe.easymenu.security;
 
 import org.esfe.easymenu.controladores.PagoController;
+import org.esfe.easymenu.dtos.PagoDTO;
 import org.esfe.easymenu.dtos.ResumenVentasResponseDTO;
+import org.esfe.easymenu.modelos.EstadoPago;
 import org.esfe.easymenu.modelos.RolUsuario;
 import org.esfe.easymenu.modelos.Usuario;
 import org.esfe.easymenu.repositorios.UsuarioRepository;
@@ -12,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -24,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -97,6 +101,46 @@ class ResumenVentasEndpointAuthorizationTest {
                 .andExpect(status().isForbidden());
 
         verify(pagoService, org.mockito.Mockito.times(2)).obtenerTodos();
+    }
+
+    @Test
+    void consultaDePagoPorPedidoPermiteAdministradorYCajeroPeroNoCocinaNiAnonimos()
+            throws Exception {
+        PagoDTO pago = new PagoDTO();
+        pago.setId(9L);
+        pago.setPedidoId(42L);
+        pago.setEstado(EstadoPago.REEMBOLSADO);
+        pago.setMotivoReembolso("Pedido cancelado");
+        when(pagoService.obtenerPorPedidoId(42L)).thenReturn(pago);
+
+        for (RolUsuario role : List.of(RolUsuario.ADMINISTRADOR, RolUsuario.CAJERO)) {
+            mockMvc.perform(get("/api/pagos/pedido/42")
+                            .header("Authorization", bearer(tokenFor(role))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(9))
+                    .andExpect(jsonPath("$.pedidoId").value(42))
+                    .andExpect(jsonPath("$.estado").value("REEMBOLSADO"))
+                    .andExpect(jsonPath("$.motivoReembolso").value("Pedido cancelado"));
+        }
+
+        mockMvc.perform(get("/api/pagos/pedido/42")
+                        .header("Authorization", bearer(tokenFor(RolUsuario.COCINA))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/pagos/pedido/42"))
+                .andExpect(status().isForbidden());
+
+        verify(pagoService, org.mockito.Mockito.times(2)).obtenerPorPedidoId(42L);
+    }
+
+    @Test
+    void cocinaNoPuedeCobrarNiInvocarElServicioDePagos() throws Exception {
+        mockMvc.perform(post("/api/pagos/cobrar")
+                        .header("Authorization", bearer(tokenFor(RolUsuario.COCINA)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(pagoService);
     }
 
     @Test

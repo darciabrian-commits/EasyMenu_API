@@ -3,6 +3,7 @@ package org.esfe.easymenu.security;
 import org.esfe.easymenu.controladores.PedidoController;
 import org.esfe.easymenu.dtos.CrearPedidoRequestDTO;
 import org.esfe.easymenu.dtos.PedidoResponseDTO;
+import org.esfe.easymenu.excepcion.ConflictoIdempotenciaException;
 import org.esfe.easymenu.excepcion.RecursoNoEncontradoException;
 import org.esfe.easymenu.modelos.RolUsuario;
 import org.esfe.easymenu.modelos.Usuario;
@@ -19,6 +20,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -55,7 +57,8 @@ class PedidoPublicEndpointsAuthorizationTest {
         PedidoResponseDTO pedido = new PedidoResponseDTO();
         pedido.setCodigoCorto("ABC123");
         when(pedidoService.obtenerPorCodigo("ABC123")).thenReturn(pedido);
-        when(pedidoService.crearPedido(any(CrearPedidoRequestDTO.class))).thenReturn(pedido);
+        when(pedidoService.crearPedido(
+                any(CrearPedidoRequestDTO.class), isNull())).thenReturn(pedido);
 
         mockMvc.perform(get("/api/pedidos/codigo/ABC123"))
                 .andExpect(status().isOk())
@@ -73,8 +76,41 @@ class PedidoPublicEndpointsAuthorizationTest {
                 .andExpect(status().isNoContent());
 
         verify(pedidoService).obtenerPorCodigo("ABC123");
-        verify(pedidoService).crearPedido(any(CrearPedidoRequestDTO.class));
+        verify(pedidoService).crearPedido(any(CrearPedidoRequestDTO.class), isNull());
         verify(pedidoService).cancelarPedidoPorCodigo("ABC123");
+    }
+
+    @Test
+    void postPedidoAceptaLaClaveOpcionalYTraduceConflictosA409() throws Exception {
+        PedidoResponseDTO pedido = new PedidoResponseDTO();
+        pedido.setCodigoCorto("ABCDEFGHJK");
+        String idempotencyKey = UUID.randomUUID().toString();
+        when(pedidoService.crearPedido(
+                any(CrearPedidoRequestDTO.class), eq(idempotencyKey))).thenReturn(pedido);
+
+        mockMvc.perform(post("/api/pedidos")
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteOMesa":"Mesa 4","items":[{"productoId":7,"cantidad":1}]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.codigoCorto").value("ABCDEFGHJK"));
+        verify(pedidoService).crearPedido(any(CrearPedidoRequestDTO.class), eq(idempotencyKey));
+
+        String conflictKey = UUID.randomUUID().toString();
+        when(pedidoService.crearPedido(
+                any(CrearPedidoRequestDTO.class), eq(conflictKey)))
+                .thenThrow(new ConflictoIdempotenciaException("La clave ya tiene otro contenido"));
+
+        mockMvc.perform(post("/api/pedidos")
+                        .header("Idempotency-Key", conflictKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteOMesa":"Mesa 5","items":[{"productoId":7,"cantidad":1}]}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.estado").value(409));
     }
 
     @Test
