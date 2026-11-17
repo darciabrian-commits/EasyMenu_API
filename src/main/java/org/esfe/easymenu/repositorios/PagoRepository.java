@@ -1,7 +1,9 @@
 package org.esfe.easymenu.repositorios;
 
+import jakarta.persistence.LockModeType;
 import org.esfe.easymenu.modelos.Pago;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -14,6 +16,13 @@ import java.util.Optional;
 public interface PagoRepository extends JpaRepository<Pago, Long> {
     Optional<Pago> findByPedidoId(Long pedidoId);
     boolean existsByPedidoId(Long pedidoId);
+
+    @Query("SELECT p.pedido.id FROM Pago p WHERE p.id = :pagoId")
+    Optional<Long> buscarPedidoIdPorPagoId(@Param("pagoId") Long pagoId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Pago p WHERE p.id = :id")
+    Optional<Pago> buscarPorIdConBloqueo(@Param("id") Long id);
 
     @Query("""
             SELECT COUNT(p.id) AS cantidadCobros,

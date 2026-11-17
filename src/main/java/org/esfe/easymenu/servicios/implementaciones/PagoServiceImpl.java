@@ -100,8 +100,20 @@ public class PagoServiceImpl implements IPagoService {
     @Override
     @Transactional // HU-12: Operación atómica de reembolso
     public PagoDTO reembolsarPago(Long pagoId, String motivo) {
-        Pago pago = pagoRepository.findById(pagoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Registro de pago no encontrado con ID: " + pagoId));
+        Long pedidoId = pagoRepository.buscarPedidoIdPorPagoId(pagoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Registro de pago no encontrado con ID: " + pagoId));
+        Pedido pedido = pedidoRepository.buscarPorIdConBloqueo(pedidoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Registro de pago no encontrado con ID: " + pagoId));
+        Pago pago = pagoRepository.buscarPorIdConBloqueo(pagoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Registro de pago no encontrado con ID: " + pagoId));
+
+        if (!pedidoId.equals(pago.getPedido().getId())) {
+            throw new ReglaNegocioException(
+                    "El pedido asociado al pago cambió durante el reembolso");
+        }
 
         if (pago.getEstado() != EstadoPago.COMPLETADO) {
             throw new ReglaNegocioException("Solo se pueden reembolsar pagos completados");
@@ -116,7 +128,6 @@ public class PagoServiceImpl implements IPagoService {
         pago.setEstado(EstadoPago.REEMBOLSADO);
         pago.setMotivoReembolso(motivoNormalizado);
 
-        Pedido pedido = pago.getPedido();
         pedido.setEstado(EstadoPedido.REEMBOLSADO);
         pedidoRepository.save(pedido);
 

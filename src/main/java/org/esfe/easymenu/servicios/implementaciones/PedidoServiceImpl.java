@@ -309,12 +309,13 @@ public class PedidoServiceImpl implements PedidoService {
     }
 
     @Override
+    @Transactional
     public PedidoResponseDTO cambiarEstado(
             Long id,
             EstadoPedido nuevoEstado
     ) {
 
-        Pedido pedido = pedidoRepository.findById(id)
+        Pedido pedido = pedidoRepository.buscarPorIdConBloqueo(id)
                 .orElseThrow(() ->
                         new RecursoNoEncontradoException(
                                 "Pedido no encontrado con el ID: " + id

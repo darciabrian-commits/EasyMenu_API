@@ -17,6 +17,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -53,6 +54,15 @@ class PagoServiceImplTest {
     @Test
     void consultaDeCobroUsaBloqueoPesimistaDeEscritura() throws NoSuchMethodException {
         Lock lock = PedidoRepository.class
+                .getMethod("buscarPorIdConBloqueo", Long.class)
+                .getAnnotation(Lock.class);
+
+        assertEquals(LockModeType.PESSIMISTIC_WRITE, lock.value());
+    }
+
+    @Test
+    void reembolsoBloqueaPrimeroElPedidoYDespuesElPago() throws NoSuchMethodException {
+        Lock lock = PagoRepository.class
                 .getMethod("buscarPorIdConBloqueo", Long.class)
                 .getAnnotation(Lock.class);
 
@@ -154,7 +164,7 @@ class PagoServiceImplTest {
         pago.setId(1L);
         pago.setPedido(pedido);
         pago.setEstado(EstadoPago.COMPLETADO);
-        when(pagoRepository.findById(1L)).thenReturn(Optional.of(pago));
+        prepararPagoParaReembolso(pago);
         when(pagoRepository.save(pago)).thenReturn(pago);
 
         var resultado = pagoService.reembolsarPago(1L, "  Reembolso administrativo  ");
@@ -167,6 +177,10 @@ class PagoServiceImplTest {
         assertEquals("Reembolso administrativo", resultado.getMotivoReembolso());
         verify(pedidoRepository).save(pedido);
         verify(pagoRepository).save(pago);
+        InOrder orden = inOrder(pedidoRepository, pagoRepository);
+        orden.verify(pagoRepository).buscarPedidoIdPorPagoId(1L);
+        orden.verify(pedidoRepository).buscarPorIdConBloqueo(2L);
+        orden.verify(pagoRepository).buscarPorIdConBloqueo(1L);
     }
 
     @Test
@@ -174,7 +188,7 @@ class PagoServiceImplTest {
         Pago pago = pago(EstadoPago.REEMBOLSADO);
         LocalDateTime fechaReembolsoExistente = LocalDateTime.of(2026, 1, 2, 3, 4);
         pago.setFechaReembolso(fechaReembolsoExistente);
-        when(pagoRepository.findById(1L)).thenReturn(Optional.of(pago));
+        prepararPagoParaReembolso(pago);
 
         assertThrows(ReglaNegocioException.class,
                 () -> pagoService.reembolsarPago(1L, "Motivo"));
@@ -187,7 +201,7 @@ class PagoServiceImplTest {
     @Test
     void rechazaPagoCancelado() {
         Pago pago = pago(EstadoPago.CANCELADO);
-        when(pagoRepository.findById(1L)).thenReturn(Optional.of(pago));
+        prepararPagoParaReembolso(pago);
 
         assertThrows(ReglaNegocioException.class,
                 () -> pagoService.reembolsarPago(1L, "Motivo"));
@@ -204,7 +218,7 @@ class PagoServiceImplTest {
         Pago pago = pago(EstadoPago.COMPLETADO);
         LocalDateTime fechaReembolsoExistente = LocalDateTime.of(2026, 1, 2, 3, 4);
         pago.setFechaReembolso(fechaReembolsoExistente);
-        when(pagoRepository.findById(1L)).thenReturn(Optional.of(pago));
+        prepararPagoParaReembolso(pago);
 
         assertThrows(ReglaNegocioException.class,
                 () -> pagoService.reembolsarPago(1L, motivo));
@@ -216,7 +230,7 @@ class PagoServiceImplTest {
 
     @Test
     void pagoInexistenteProduceNoEncontrado() {
-        when(pagoRepository.findById(404L)).thenReturn(Optional.empty());
+        when(pagoRepository.buscarPedidoIdPorPagoId(404L)).thenReturn(Optional.empty());
 
         assertThrows(RecursoNoEncontradoException.class,
                 () -> pagoService.reembolsarPago(404L, "Motivo"));
@@ -234,6 +248,13 @@ class PagoServiceImplTest {
         pago.setPedido(pedido);
         pago.setEstado(estado);
         return pago;
+    }
+
+    private void prepararPagoParaReembolso(Pago pago) {
+        when(pagoRepository.buscarPedidoIdPorPagoId(1L)).thenReturn(Optional.of(2L));
+        when(pedidoRepository.buscarPorIdConBloqueo(2L))
+                .thenReturn(Optional.of(pago.getPedido()));
+        when(pagoRepository.buscarPorIdConBloqueo(1L)).thenReturn(Optional.of(pago));
     }
 
     private Pedido pedido(EstadoPedido estado) {

@@ -47,6 +47,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -254,6 +255,108 @@ class PagoRepositorySqlServerTest {
     }
 
     @Test
+    void dosReembolsosConcurrentesDelMismoPagoSoloPermitenElPrimero() throws Exception {
+        Pago pago = crearPago(new BigDecimal("25.00"), EstadoPago.COMPLETADO);
+        Long pagoId = pago.getId();
+        Long pedidoId = pago.getPedido().getId();
+        AtomicReference<LocalDateTime> fechaPrimerReembolso = new AtomicReference<>();
+
+        ejecutarConPrimeraOperacionRetenida(
+                () -> {
+                    pagoService.reembolsarPago(pagoId, "Primer motivo");
+                    entityManager.flush();
+                    Pago primerPago = pagoRepository.findById(pagoId).orElseThrow();
+                    entityManager.refresh(primerPago);
+                    fechaPrimerReembolso.set(primerPago.getFechaReembolso());
+                },
+                () -> assertThrows(ReglaNegocioException.class,
+                        () -> pagoService.reembolsarPago(pagoId, "Segundo motivo")));
+
+        Pago pagoFinal = pagoRepository.findById(pagoId).orElseThrow();
+        Pedido pedidoFinal = pedidoRepository.findById(pedidoId).orElseThrow();
+        assertEquals(EstadoPago.REEMBOLSADO, pagoFinal.getEstado());
+        assertEquals(EstadoPedido.REEMBOLSADO, pedidoFinal.getEstado());
+        assertEquals("Primer motivo", pagoFinal.getMotivoReembolso());
+        assertEquals(fechaPrimerReembolso.get(), pagoFinal.getFechaReembolso());
+    }
+
+    @Test
+    void reembolsoPrimeroImpideQueUnCambioDeEstadoPosteriorLoSobrescriba() throws Exception {
+        Pago pago = crearPago(new BigDecimal("25.00"), EstadoPago.COMPLETADO);
+        Long pagoId = pago.getId();
+        Long pedidoId = pago.getPedido().getId();
+
+        ejecutarConPrimeraOperacionRetenida(
+                () -> pagoService.reembolsarPago(pagoId, "Motivo reembolso primero"),
+                () -> assertThrows(ReglaNegocioException.class,
+                        () -> pedidoService.cambiarEstado(
+                                pedidoId, EstadoPedido.EN_PREPARACION)));
+
+        assertEquals(EstadoPago.REEMBOLSADO,
+                pagoRepository.findById(pagoId).orElseThrow().getEstado());
+        assertEquals(EstadoPedido.REEMBOLSADO,
+                pedidoRepository.findById(pedidoId).orElseThrow().getEstado());
+    }
+
+    @Test
+    void cambioDeEstadoPrimeroSeSerializaAntesDelReembolso() throws Exception {
+        Pago pago = crearPago(new BigDecimal("25.00"), EstadoPago.COMPLETADO);
+        Long pagoId = pago.getId();
+        Long pedidoId = pago.getPedido().getId();
+
+        ejecutarConPrimeraOperacionRetenida(
+                () -> pedidoService.cambiarEstado(pedidoId, EstadoPedido.EN_PREPARACION),
+                () -> pagoService.reembolsarPago(pagoId, "Motivo reembolso posterior"));
+
+        assertEquals(EstadoPago.REEMBOLSADO,
+                pagoRepository.findById(pagoId).orElseThrow().getEstado());
+        assertEquals(EstadoPedido.REEMBOLSADO,
+                pedidoRepository.findById(pedidoId).orElseThrow().getEstado());
+    }
+
+    @Test
+    void transicionesConcurrentesSeValidanContraElEstadoConfirmado() throws Exception {
+        Pedido pedido = crearPedido(EstadoPedido.RECIBIDO, LocalDateTime.now());
+        Long pedidoId = pedido.getId();
+
+        ejecutarConPrimeraOperacionRetenida(
+                () -> pedidoService.cambiarEstado(
+                        pedidoId, EstadoPedido.EN_PREPARACION),
+                () -> pedidoService.cambiarEstado(pedidoId, EstadoPedido.LISTO));
+
+        assertEquals(EstadoPedido.LISTO,
+                pedidoRepository.findById(pedidoId).orElseThrow().getEstado());
+    }
+
+    @Test
+    void dosTransicionesIgualesConcurrentesNoRepitenUnPasoYaAplicado() throws Exception {
+        Pedido pedido = crearPedido(EstadoPedido.RECIBIDO, LocalDateTime.now());
+        Long pedidoId = pedido.getId();
+
+        ejecutarConPrimeraOperacionRetenida(
+                () -> pedidoService.cambiarEstado(
+                        pedidoId, EstadoPedido.EN_PREPARACION),
+                () -> assertThrows(ReglaNegocioException.class,
+                        () -> pedidoService.cambiarEstado(
+                                pedidoId, EstadoPedido.EN_PREPARACION)));
+
+        assertEquals(EstadoPedido.EN_PREPARACION,
+                pedidoRepository.findById(pedidoId).orElseThrow().getEstado());
+    }
+
+    @Test
+    void cambioDeEstadoNoPermiteLlegarARecibidoSinCobro() {
+        Pedido pedido = crearPedido(EstadoPedido.PENDIENTE_PAGO, LocalDateTime.now());
+
+        assertThrows(ReglaNegocioException.class,
+                () -> pedidoService.cambiarEstado(pedido.getId(), EstadoPedido.RECIBIDO));
+
+        assertEquals(EstadoPedido.PENDIENTE_PAGO,
+                pedidoRepository.findById(pedido.getId()).orElseThrow().getEstado());
+        assertTrue(pagoRepository.findByPedidoId(pedido.getId()).isEmpty());
+    }
+
+    @Test
     void colisionSqlServerHaceRollbackDeIntentoYReintentaEnOtraTransaccion() {
         String colision = "ABCDEFGHJK";
         String codigoAlternativo = "ZZZZZZZZZZ";
@@ -342,7 +445,7 @@ class PagoRepositorySqlServerTest {
                 segunda.run();
             });
             assertTrue(segundaIniciada.await(10, TimeUnit.SECONDS));
-            Thread.sleep(200);
+            esperarBloqueoSqlServerPedidosOPagos();
             assertFalse(segundaFutura.isDone(),
                     "La segunda operación debe esperar el bloqueo de la primera");
 
@@ -354,6 +457,26 @@ class PagoRepositorySqlServerTest {
             executor.shutdownNow();
             assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
         }
+    }
+
+    private void esperarBloqueoSqlServerPedidosOPagos() throws InterruptedException {
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < limite) {
+            Integer bloqueos = jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM sys.dm_exec_requests AS r
+                    CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) AS t
+                    WHERE r.session_id <> @@SPID
+                      AND r.blocking_session_id > 0
+                      AND r.wait_type LIKE 'LCK%'
+                      AND (t.text LIKE '%pedidos%' OR t.text LIKE '%pagos%')
+                    """, Integer.class);
+            if (bloqueos != null && bloqueos > 0) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        fail("SQL Server no mostró una operación de pago o pedido bloqueada");
     }
 
     private void esperar(CountDownLatch latch) {
