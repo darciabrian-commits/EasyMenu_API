@@ -124,6 +124,34 @@ class PedidoServiceImplTest {
     }
 
     @Test
+    void rechazaImportesFueraDeLaPrecisionDecimalDelPedido() {
+        Producto producto = producto(7L);
+        producto.setPrecio(new BigDecimal("99999999.99"));
+        when(productoRepository.findById(7L)).thenReturn(Optional.of(producto));
+
+        assertThrows(ReglaNegocioException.class, () -> pedidoService.crearPedido(
+                new CrearPedidoRequestDTO("Mesa 4", List.of(new ItemPedidoDTO(7L, 2, null)))
+        ));
+
+        verifyNoInteractions(pedidoRepository);
+    }
+
+    @Test
+    void validaElTotalAcumuladoAntesDePersistirElPedido() {
+        Producto producto = producto(7L);
+        producto.setPrecio(new BigDecimal("60000000.00"));
+        when(productoRepository.findById(7L)).thenReturn(Optional.of(producto));
+
+        assertThrows(ReglaNegocioException.class, () -> pedidoService.crearPedido(
+                new CrearPedidoRequestDTO("Mesa 4", List.of(
+                        new ItemPedidoDTO(7L, 1, null),
+                        new ItemPedidoDTO(7L, 1, null)))
+        ));
+
+        verifyNoInteractions(pedidoRepository);
+    }
+
+    @Test
     void noReintentaNiContinuaSiLaIntegridadFallaPorOtraCausa() {
         Producto producto = producto(7L);
         when(productoRepository.findById(7L)).thenReturn(Optional.of(producto));

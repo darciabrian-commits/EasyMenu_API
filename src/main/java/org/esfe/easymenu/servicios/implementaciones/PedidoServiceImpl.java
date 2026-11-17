@@ -51,6 +51,7 @@ public class PedidoServiceImpl implements PedidoService {
     private static final Pattern CLAVE_IDEMPOTENCIA_UUID_V4 =
             Pattern.compile("(?i)[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");
     private static final String MENSAJE_PEDIDO_NO_DISPONIBLE = "Pedido no disponible";
+    private static final BigDecimal MAXIMO_IMPORTE_PEDIDO = new BigDecimal("99999999.99");
     private static final String MENSAJE_CLAVE_EN_PROCESO =
             "La solicitud con esta clave sigue en proceso; reintente la misma solicitud.";
 
@@ -193,6 +194,11 @@ public class PedidoServiceImpl implements PedidoService {
             BigDecimal subtotal = producto.getPrecio()
                     .multiply(BigDecimal.valueOf(item.cantidad()));
             totalCalculado = totalCalculado.add(subtotal);
+            if (subtotal.compareTo(MAXIMO_IMPORTE_PEDIDO) > 0
+                    || totalCalculado.compareTo(MAXIMO_IMPORTE_PEDIDO) > 0) {
+                throw new ReglaNegocioException(
+                        "El importe del pedido supera el máximo que admite el sistema");
+            }
 
             DetallePedido detalle = new DetallePedido();
             detalle.setProducto(producto);

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PublicPedidoRateLimitFilterTest {
@@ -70,6 +72,119 @@ class PublicPedidoRateLimitFilterTest {
         assertEquals("60", limitada.getHeader("Retry-After"));
     }
 
+    @Test
+    void limitaLaCreacionPublicaConRetryAfter() throws Exception {
+        PublicPedidoRateLimitFilter filter = new PublicPedidoRateLimitFilter(
+                new ObjectMapper().findAndRegisterModules());
+
+        for (int i = 0; i < PublicPedidoRateLimitFilter.MAX_CREATE_REQUESTS_PER_WINDOW; i++) {
+            assertEquals(200, perform(
+                    filter,
+                    "192.0.2.14",
+                    "POST",
+                    "/api/pedidos"
+            ).getStatus());
+        }
+
+        MockHttpServletResponse limitada = perform(
+                filter,
+                "192.0.2.14",
+                "POST",
+                "/api/pedidos"
+        );
+        assertEquals(429, limitada.getStatus());
+        assertEquals("60", limitada.getHeader("Retry-After"));
+    }
+
+    @Test
+    void rechazaXForwardedForDeUnClienteSinProxyConfiable() throws Exception {
+        PublicPedidoRateLimitFilter filter = new PublicPedidoRateLimitFilter(
+                new ObjectMapper().findAndRegisterModules(),
+                1,
+                60,
+                60_000,
+                List.of("10.0.0.0/8"));
+
+        assertEquals(200, perform(
+                filter,
+                "192.0.2.20",
+                "POST",
+                "/api/pedidos"
+        ).getStatus());
+        assertEquals(400, perform(
+                filter,
+                "192.0.2.20",
+                "POST",
+                "/api/pedidos",
+                "192.0.2.22"
+        ).getStatus());
+        assertEquals(400, perform(
+                filter,
+                "192.0.2.21",
+                "POST",
+                "/api/pedidos",
+                "192.0.2.20"
+        ).getStatus());
+        assertEquals(200, perform(
+                filter,
+                "192.0.2.21",
+                "POST",
+                "/api/pedidos"
+        ).getStatus());
+    }
+
+    @Test
+    void usaLaIPClienteDelProxySoloSiElProxyEstaEnElRangoConfiable() throws Exception {
+        PublicPedidoRateLimitFilter filter = new PublicPedidoRateLimitFilter(
+                new ObjectMapper().findAndRegisterModules(),
+                1,
+                60,
+                60_000,
+                List.of("10.0.0.0/8"));
+
+        assertEquals(200, perform(
+                filter,
+                "10.1.2.3",
+                "POST",
+                "/api/pedidos",
+                "192.0.2.30, 10.2.2.2"
+        ).getStatus());
+        assertEquals(429, perform(
+                filter,
+                "10.1.2.4",
+                "POST",
+                "/api/pedidos",
+                "192.0.2.30"
+        ).getStatus());
+        assertEquals(200, perform(
+                filter,
+                "10.1.2.3",
+                "POST",
+                "/api/pedidos",
+                "192.0.2.31"
+        ).getStatus());
+    }
+
+    @Test
+    void rechazaUnaCadenaDeProxyConfiableQueNoPermiteIdentificarAlCliente() throws Exception {
+        PublicPedidoRateLimitFilter filter = new PublicPedidoRateLimitFilter(
+                new ObjectMapper().findAndRegisterModules(),
+                1,
+                60,
+                60_000,
+                List.of("10.0.0.0/8"));
+
+        MockHttpServletResponse response = perform(
+                filter,
+                "10.1.2.3",
+                "POST",
+                "/api/pedidos",
+                "no-es-una-ip"
+        );
+
+        assertEquals(400, response.getStatus());
+    }
+
     private MockHttpServletResponse perform(
             PublicPedidoRateLimitFilter filter,
             String clientAddress
@@ -83,9 +198,22 @@ class PublicPedidoRateLimitFilterTest {
             String method,
             String path
     ) throws Exception {
+        return perform(filter, clientAddress, method, path, null);
+    }
+
+    private MockHttpServletResponse perform(
+            PublicPedidoRateLimitFilter filter,
+            String clientAddress,
+            String method,
+            String path,
+            String forwardedFor
+    ) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest(method, path);
         request.setServletPath(path);
         request.setRemoteAddr(clientAddress);
+        if (forwardedFor != null) {
+            request.addHeader("X-Forwarded-For", forwardedFor);
+        }
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = (servletRequest, servletResponse) ->
                 ((MockHttpServletResponse) servletResponse).setStatus(200);

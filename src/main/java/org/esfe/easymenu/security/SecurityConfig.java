@@ -16,6 +16,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -71,7 +75,10 @@ public class SecurityConfig {
 
                                                 // LOGIN Y SWAGGER
                                                 .requestMatchers(
-                                                                "/api/auth/**",
+                                                                HttpMethod.POST,
+                                                                "/api/auth/login")
+                                                .permitAll()
+                                                .requestMatchers(
                                                                 "/v3/api-docs/**",
                                                                 "/swagger-ui/**",
                                                                 "/swagger-ui.html")
@@ -172,8 +179,25 @@ public class SecurityConfig {
         }
 
         @Bean
-        public PublicPedidoRateLimitFilter publicPedidoRateLimitFilter(ObjectMapper objectMapper) {
-                return new PublicPedidoRateLimitFilter(objectMapper);
+        public PublicPedidoRateLimitFilter publicPedidoRateLimitFilter(
+                        ObjectMapper objectMapper,
+                        @Value("${easymenu.rate-limit.pedido-creacion.max-requests:30}")
+                        int createLimit,
+                        @Value("${easymenu.rate-limit.pedido-publico.max-requests:60}")
+                        int publicLimit,
+                        @Value("${easymenu.rate-limit.window-seconds:60}")
+                        long windowSeconds,
+                        @Value("${easymenu.rate-limit.trusted-proxy-cidrs:}")
+                        String trustedProxyCidrs) {
+                List<String> proxyCidrs = trustedProxyCidrs.isBlank()
+                                ? List.of()
+                                : Arrays.asList(trustedProxyCidrs.split(",", -1));
+                return new PublicPedidoRateLimitFilter(
+                                objectMapper,
+                                createLimit,
+                                publicLimit,
+                                Math.multiplyExact(windowSeconds, 1000),
+                                proxyCidrs);
         }
 
         @Bean

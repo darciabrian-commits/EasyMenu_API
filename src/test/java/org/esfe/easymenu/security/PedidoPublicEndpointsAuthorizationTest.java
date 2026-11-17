@@ -114,6 +114,53 @@ class PedidoPublicEndpointsAuthorizationTest {
     }
 
     @Test
+    void postPedidoRechazaEntradasQueExcedenLosLimitesDeDatos() throws Exception {
+        String item = "{\"productoId\":7,\"cantidad\":1}";
+        String pedidoConMuchosItems = "{\"clienteOMesa\":\"Mesa 4\",\"items\":["
+                + String.join(",", java.util.Collections.nCopies(101, item)) + "]}";
+
+        mockMvc.perform(post("/api/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteOMesa":"%s","items":[{"productoId":7,"cantidad":1}]}
+                                """.formatted("M".repeat(101))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteOMesa":"Mesa 4","items":[{"productoId":7,"cantidad":0}]}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteOMesa":"Mesa 4","items":[{"productoId":-7,"cantidad":1}]}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clienteOMesa":"Mesa 4","items":[{"productoId":7,"cantidad":1,"notas":"%s"}]}
+                                """.formatted("N".repeat(256))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(pedidoConMuchosItems))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/pedidos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clienteOMesa\":"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
     void erroresPublicosNoRevelanElCodigoNiLaExistenciaDelPedido() throws Exception {
         when(pedidoService.obtenerPorCodigo("ABC123"))
                 .thenThrow(new RecursoNoEncontradoException("Pedido no disponible"));
@@ -139,6 +186,14 @@ class PedidoPublicEndpointsAuthorizationTest {
         mockMvc.perform(patch("/api/pedidos/1/estado").param("estado", "RECIBIDO"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(patch("/api/pedidos/1/cancelar"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(pedidoService);
+    }
+
+    @Test
+    void soloPostLoginEsPublicoDentroDeLaRutaDeAutenticacion() throws Exception {
+        mockMvc.perform(get("/api/auth/otra-ruta"))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(pedidoService);
