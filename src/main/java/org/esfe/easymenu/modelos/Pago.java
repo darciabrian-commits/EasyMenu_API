@@ -42,6 +42,9 @@ public class Pago {
     @Column(nullable = false)
     private LocalDateTime fechaHora;
 
+    @Column(nullable = true)
+    private LocalDateTime fechaReembolso;
+
     @Column(length = 255)
     private String motivoReembolso;
 

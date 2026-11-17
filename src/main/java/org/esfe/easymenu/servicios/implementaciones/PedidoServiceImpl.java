@@ -14,21 +14,36 @@ import org.esfe.easymenu.repositorios.PedidoRepository;
 import org.esfe.easymenu.repositorios.ProductoRepository;
 import org.esfe.easymenu.servicios.interfaces.PedidoService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class PedidoServiceImpl implements PedidoService {
+
+    private static final int MAX_INTENTOS_CODIGO = 5;
+    private static final Pattern CODIGO_CORTO_VALIDO =
+            Pattern.compile("(?:[0-9A-F]{6}|[0-9A-HJKMNP-TV-Z]{10})");
+    private static final String MENSAJE_PEDIDO_NO_DISPONIBLE = "Pedido no disponible";
 
     @Autowired
     private PedidoRepository pedidoRepository;
 
     @Autowired
     private ProductoRepository productoRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Override
     public PedidoResponseDTO crearPedido(CrearPedidoRequestDTO dto) {
@@ -86,7 +101,7 @@ public class PedidoServiceImpl implements PedidoService {
 
         pedido.setTotal(totalCalculado);
 
-        Pedido guardado = pedidoRepository.save(pedido);
+        Pedido guardado = guardarConCodigoUnico(pedido);
 
         return convertirADto(guardado);
     }
@@ -155,46 +170,13 @@ public class PedidoServiceImpl implements PedidoService {
     }
 
     @Override
+    @Transactional
     public void cancelarPedido(Long id) {
 
-        Pedido pedido = pedidoRepository.findById(id)
+        Pedido pedido = pedidoRepository.buscarPorIdConBloqueo(id)
                 .orElseThrow(() ->
                         new RecursoNoEncontradoException(
                                 "Pedido no encontrado con el ID: " + id
-                        )
-                );
-
-        if (pedido.getEstado() == EstadoPedido.ENTREGADO) {
-            throw new ReglaNegocioException(
-                    "No se puede cancelar un pedido que ya fue entregado"
-            );
-        }
-
-        pedido.setEstado(EstadoPedido.CANCELADO);
-
-        pedidoRepository.save(pedido);
-    }
-
-    @Override
-    public PedidoResponseDTO obtenerPorCodigo(String codigoCorto) {
-
-        Pedido pedido = pedidoRepository.findByCodigoCorto(codigoCorto)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "Pedido no encontrado con el código: " + codigoCorto
-                        )
-                );
-
-        return convertirADto(pedido);
-    }
-
-    @Override
-    public void cancelarPedidoPorCodigo(String codigoCorto) {
-
-        Pedido pedido = pedidoRepository.findByCodigoCorto(codigoCorto)
-                .orElseThrow(() ->
-                        new RecursoNoEncontradoException(
-                                "Pedido no encontrado con el código: " + codigoCorto
                         )
                 );
 
@@ -210,6 +192,42 @@ public class PedidoServiceImpl implements PedidoService {
     }
 
     @Override
+    public PedidoResponseDTO obtenerPorCodigo(String codigoCorto) {
+
+        String codigoNormalizado = normalizarCodigoPublico(codigoCorto);
+        Pedido pedido = pedidoRepository.findByCodigoCorto(codigoNormalizado)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                MENSAJE_PEDIDO_NO_DISPONIBLE
+                        )
+                );
+
+        return convertirADto(pedido, true);
+    }
+
+    @Override
+    @Transactional
+    public void cancelarPedidoPorCodigo(String codigoCorto) {
+
+        String codigoNormalizado = normalizarCodigoPublico(codigoCorto);
+        Pedido pedido = pedidoRepository.buscarPorCodigoConBloqueo(codigoNormalizado)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                MENSAJE_PEDIDO_NO_DISPONIBLE
+                        )
+                );
+
+        if (pedido.getEstado() != EstadoPedido.PENDIENTE_PAGO) {
+            throw new RecursoNoEncontradoException(MENSAJE_PEDIDO_NO_DISPONIBLE);
+        }
+
+        pedido.setEstado(EstadoPedido.CANCELADO);
+
+        pedidoRepository.save(pedido);
+    }
+
+    @Override
+    @Transactional
     public void expirarPedidosPendientes(int minutosLimite) {
 
         if (minutosLimite <= 0) {
@@ -221,27 +239,23 @@ public class PedidoServiceImpl implements PedidoService {
         LocalDateTime limite =
                 LocalDateTime.now().minusMinutes(minutosLimite);
 
-        // Ahora buscamos los pedidos pendientes de pago
-        List<Pedido> pendientes =
-                pedidoRepository.findByEstado(
-                        EstadoPedido.PENDIENTE_PAGO
-                );
+        List<Long> idsVencidos = pedidoRepository.buscarIdsPendientesVencidos(
+                EstadoPedido.PENDIENTE_PAGO,
+                limite);
 
-        for (Pedido pedido : pendientes) {
+        for (Long id : idsVencidos) {
+            pedidoRepository.buscarPorIdConBloqueo(id).ifPresent(pedido -> {
+                LocalDateTime fechaComparar = pedido.getFechaHora() != null
+                        ? pedido.getFechaHora()
+                        : pedido.getFechaCreacion();
 
-            LocalDateTime fechaComparar =
-                    pedido.getFechaHora() != null
-                            ? pedido.getFechaHora()
-                            : pedido.getFechaCreacion();
-
-            if (pedido.getEstado() == EstadoPedido.PENDIENTE_PAGO
-                    && fechaComparar != null
-                    && fechaComparar.isBefore(limite)) {
-
-                pedido.setEstado(EstadoPedido.EXPIRADO);
-
-                pedidoRepository.save(pedido);
-            }
+                if (pedido.getEstado() == EstadoPedido.PENDIENTE_PAGO
+                        && fechaComparar != null
+                        && fechaComparar.isBefore(limite)) {
+                    pedido.setEstado(EstadoPedido.EXPIRADO);
+                    pedidoRepository.save(pedido);
+                }
+            });
         }
     }
 
@@ -249,16 +263,83 @@ public class PedidoServiceImpl implements PedidoService {
     // MÉTODO PRIVADO DE MAPEO
     // -------------------------
 
+    private Pedido guardarConCodigoUnico(Pedido pedido) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        for (int intento = 0; intento < MAX_INTENTOS_CODIGO; intento++) {
+            String codigo = Pedido.generarCodigoCorto();
+            if (pedidoRepository.findByCodigoCorto(codigo).isPresent()) {
+                continue;
+            }
+
+            Pedido pedidoConCodigo = copiarParaPersistencia(pedido, codigo);
+            try {
+                Pedido guardado = transaction.execute(
+                        status -> pedidoRepository.save(pedidoConCodigo));
+                if (guardado == null) {
+                    throw new IllegalStateException("No se guardó el pedido");
+                }
+                return guardado;
+            } catch (DataIntegrityViolationException ex) {
+                boolean colision = Boolean.TRUE.equals(transaction.execute(
+                        status -> pedidoRepository.findByCodigoCorto(codigo).isPresent()));
+                if (!colision) {
+                    throw ex;
+                }
+            }
+        }
+
+        throw new IllegalStateException("No se pudo generar un código único para el pedido");
+    }
+
+    private Pedido copiarParaPersistencia(Pedido original, String codigo) {
+        Pedido copia = new Pedido();
+        copia.setCodigoCorto(codigo);
+        copia.setClienteOMesa(original.getClienteOMesa());
+        copia.setEstado(original.getEstado());
+        copia.setTotal(original.getTotal());
+        copia.setFechaHora(original.getFechaHora());
+
+        for (DetallePedido detalleOriginal : original.getDetalles()) {
+            DetallePedido detalle = new DetallePedido();
+            detalle.setProducto(detalleOriginal.getProducto());
+            detalle.setCantidad(detalleOriginal.getCantidad());
+            detalle.setPrecioUnitario(detalleOriginal.getPrecioUnitario());
+            detalle.setSubtotal(detalleOriginal.getSubtotal());
+            detalle.setNotas(detalleOriginal.getNotas());
+            copia.agregarDetalle(detalle);
+        }
+
+        return copia;
+    }
+
+    private String normalizarCodigoPublico(String codigoCorto) {
+        if (codigoCorto == null) {
+            throw new RecursoNoEncontradoException(MENSAJE_PEDIDO_NO_DISPONIBLE);
+        }
+
+        String codigoNormalizado = codigoCorto.toUpperCase(Locale.ROOT);
+        if (!CODIGO_CORTO_VALIDO.matcher(codigoNormalizado).matches()) {
+            throw new RecursoNoEncontradoException(MENSAJE_PEDIDO_NO_DISPONIBLE);
+        }
+        return codigoNormalizado;
+    }
+
     private PedidoResponseDTO convertirADto(Pedido pedido) {
+        return convertirADto(pedido, false);
+    }
+
+    private PedidoResponseDTO convertirADto(Pedido pedido, boolean consultaPublica) {
 
         PedidoResponseDTO dto = new PedidoResponseDTO();
 
-        dto.setId(pedido.getId());
+        dto.setId(consultaPublica ? null : pedido.getId());
 
         // HU-4: código que verá el cliente
         dto.setCodigoCorto(pedido.getCodigoCorto());
 
-        dto.setClienteOMesa(pedido.getClienteOMesa());
+        dto.setClienteOMesa(consultaPublica ? null : pedido.getClienteOMesa());
         dto.setEstado(pedido.getEstado());
         dto.setTotal(pedido.getTotal());
         dto.setFechaHora(pedido.getFechaHora());
@@ -273,7 +354,7 @@ public class PedidoServiceImpl implements PedidoService {
                                 DetallePedidoResponseDTO ddto =
                                         new DetallePedidoResponseDTO();
 
-                                ddto.setId(d.getId());
+                                ddto.setId(consultaPublica ? null : d.getId());
 
                                 if (d.getProducto() != null) {
                                     ddto.setProductoId(
@@ -290,7 +371,7 @@ public class PedidoServiceImpl implements PedidoService {
                                         d.getPrecioUnitario()
                                 );
                                 ddto.setSubtotal(d.getSubtotal());
-                                ddto.setNotas(d.getNotas());
+                                ddto.setNotas(consultaPublica ? null : d.getNotas());
 
                                 return ddto;
 

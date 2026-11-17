@@ -1,5 +1,6 @@
 package org.esfe.easymenu.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,6 +15,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 
 @Configuration
 @EnableWebSecurity
@@ -56,7 +58,8 @@ public class SecurityConfig {
 
         @Bean
         public SecurityFilterChain securityFilterChain(
-                        HttpSecurity http) throws Exception {
+                        HttpSecurity http,
+                        PublicPedidoRateLimitFilter publicPedidoRateLimitFilter) throws Exception {
 
                 http
                                 .csrf(csrf -> csrf.disable())
@@ -134,6 +137,11 @@ public class SecurityConfig {
                                                                 "ADMINISTRADOR",
                                                                 "CAJERO",
                                                                 "COCINA")
+                                                // El resumen de ventas es exclusivo del administrador
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/pagos/resumen")
+                                                .hasRole("ADMINISTRADOR")
                                                 // PAGOS - SOLO CAJERO Y ADMINISTRADOR
                                                 .requestMatchers(
                                                                 "/api/pagos/**")
@@ -153,9 +161,27 @@ public class SecurityConfig {
                                                 authenticationProvider())
 
                                 .addFilterBefore(
+                                                publicPedidoRateLimitFilter,
+                                                UsernamePasswordAuthenticationFilter.class)
+
+                                .addFilterBefore(
                                                 jwtFilter,
                                                 UsernamePasswordAuthenticationFilter.class);
 
                 return http.build();
+        }
+
+        @Bean
+        public PublicPedidoRateLimitFilter publicPedidoRateLimitFilter(ObjectMapper objectMapper) {
+                return new PublicPedidoRateLimitFilter(objectMapper);
+        }
+
+        @Bean
+        public FilterRegistrationBean<PublicPedidoRateLimitFilter> publicPedidoRateLimitFilterRegistration(
+                        PublicPedidoRateLimitFilter filter) {
+                FilterRegistrationBean<PublicPedidoRateLimitFilter> registration =
+                                new FilterRegistrationBean<>(filter);
+                registration.setEnabled(false);
+                return registration;
         }
 }

@@ -3,12 +3,15 @@ package org.esfe.easymenu.controladores;
 import jakarta.validation.Valid;
 import org.esfe.easymenu.dtos.PagoDTO;
 import org.esfe.easymenu.dtos.ProcesarPagoDTO;
+import org.esfe.easymenu.dtos.ResumenVentasResponseDTO;
 import org.esfe.easymenu.servicios.interfaces.IPagoService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -26,6 +29,12 @@ public class PagoController {
     @GetMapping
     public ResponseEntity<List<PagoDTO>> listarTodos() {
         return ResponseEntity.ok(pagoService.obtenerTodos());
+    }
+
+    @GetMapping("/resumen")
+    public ResponseEntity<ResumenVentasResponseDTO> obtenerResumen(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        return ResponseEntity.ok(pagoService.obtenerResumenVentas(fecha));
     }
 
     @GetMapping("/{id}")
