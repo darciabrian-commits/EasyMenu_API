@@ -36,10 +36,13 @@ class PublicPedidoRateLimitFilterTest {
     void noLimitaRutasQueNoSonConsultaNiCancelacionPublica() throws Exception {
         PublicPedidoRateLimitFilter filter = new PublicPedidoRateLimitFilter(
                 new ObjectMapper().findAndRegisterModules());
+
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/pedidos");
         request.setServletPath("/api/pedidos");
         request.setRemoteAddr("192.0.2.12");
+
         MockHttpServletResponse response = new MockHttpServletResponse();
+
         FilterChain chain = (servletRequest, servletResponse) ->
                 ((MockHttpServletResponse) servletResponse).setStatus(200);
 
@@ -68,6 +71,7 @@ class PublicPedidoRateLimitFilterTest {
                 "PATCH",
                 "/api/pedidos/codigo/ABC123/cancelar"
         );
+
         assertEquals(429, limitada.getStatus());
         assertEquals("60", limitada.getHeader("Retry-After"));
     }
@@ -92,12 +96,13 @@ class PublicPedidoRateLimitFilterTest {
                 "POST",
                 "/api/pedidos"
         );
+
         assertEquals(429, limitada.getStatus());
         assertEquals("60", limitada.getHeader("Retry-After"));
     }
 
     @Test
-    void rechazaXForwardedForDeUnClienteSinProxyConfiable() throws Exception {
+    void ignoraXForwardedForDeUnClienteSinProxyConfiable() throws Exception {
         PublicPedidoRateLimitFilter filter = new PublicPedidoRateLimitFilter(
                 new ObjectMapper().findAndRegisterModules(),
                 1,
@@ -105,27 +110,36 @@ class PublicPedidoRateLimitFilterTest {
                 60_000,
                 List.of("10.0.0.0/8"));
 
+        // Primera solicitud desde esta IP: permitida.
         assertEquals(200, perform(
                 filter,
                 "192.0.2.20",
                 "POST",
                 "/api/pedidos"
         ).getStatus());
-        assertEquals(400, perform(
+
+        // La cabecera falsificada no debe permitir evadir el limite.
+        // Se utiliza la IP real de la conexion: 192.0.2.20.
+        assertEquals(429, perform(
                 filter,
                 "192.0.2.20",
                 "POST",
                 "/api/pedidos",
                 "192.0.2.22"
         ).getStatus());
-        assertEquals(400, perform(
+
+        // Otra IP real tiene su propio limite.
+        // La cabecera falsificada no debe cambiar su identidad.
+        assertEquals(200, perform(
                 filter,
                 "192.0.2.21",
                 "POST",
                 "/api/pedidos",
                 "192.0.2.20"
         ).getStatus());
-        assertEquals(200, perform(
+
+        // La segunda IP ya utilizo su solicitud permitida.
+        assertEquals(429, perform(
                 filter,
                 "192.0.2.21",
                 "POST",
@@ -149,6 +163,7 @@ class PublicPedidoRateLimitFilterTest {
                 "/api/pedidos",
                 "192.0.2.30, 10.2.2.2"
         ).getStatus());
+
         assertEquals(429, perform(
                 filter,
                 "10.1.2.4",
@@ -156,6 +171,7 @@ class PublicPedidoRateLimitFilterTest {
                 "/api/pedidos",
                 "192.0.2.30"
         ).getStatus());
+
         assertEquals(200, perform(
                 filter,
                 "10.1.2.3",
@@ -189,7 +205,12 @@ class PublicPedidoRateLimitFilterTest {
             PublicPedidoRateLimitFilter filter,
             String clientAddress
     ) throws Exception {
-        return perform(filter, clientAddress, "GET", "/api/pedidos/codigo/ABC123");
+        return perform(
+                filter,
+                clientAddress,
+                "GET",
+                "/api/pedidos/codigo/ABC123"
+        );
     }
 
     private MockHttpServletResponse perform(
@@ -209,16 +230,21 @@ class PublicPedidoRateLimitFilterTest {
             String forwardedFor
     ) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest(method, path);
+
         request.setServletPath(path);
         request.setRemoteAddr(clientAddress);
+
         if (forwardedFor != null) {
             request.addHeader("X-Forwarded-For", forwardedFor);
         }
+
         MockHttpServletResponse response = new MockHttpServletResponse();
+
         FilterChain chain = (servletRequest, servletResponse) ->
                 ((MockHttpServletResponse) servletResponse).setStatus(200);
 
         filter.doFilter(request, response, chain);
+
         return response;
     }
 }

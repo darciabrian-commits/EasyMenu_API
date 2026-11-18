@@ -166,16 +166,18 @@ public class PublicPedidoRateLimitFilter extends OncePerRequestFilter {
         if (remoteBytes == null) {
             return null;
         }
+
         if (!isTrustedProxy(remoteBytes)) {
-            return !request.getHeaders("X-Forwarded-For").hasMoreElements()
-                    ? addressText(remoteBytes)
-                    : null;
+            // No confiar en X-Forwarded-For si el proxy no esta verificado.
+            // Utilizar la direccion de la conexion para limitar solicitudes.
+            return addressText(remoteBytes);
         }
 
         String forwardedFor = forwardedForHeader(request);
         if (forwardedFor == null || forwardedFor.length() > MAX_FORWARDED_HEADER_LENGTH) {
             return null;
         }
+
         String[] forwardedAddresses = forwardedFor.split(",", -1);
         if (forwardedAddresses.length > MAX_FORWARDED_ADDRESSES) {
             return null;
@@ -190,18 +192,21 @@ public class PublicPedidoRateLimitFilter extends OncePerRequestFilter {
                 return addressText(address);
             }
         }
+
         return null;
     }
 
     private String forwardedForHeader(HttpServletRequest request) {
         Enumeration<String> values = request.getHeaders("X-Forwarded-For");
         StringJoiner joined = new StringJoiner(",");
+
         while (values.hasMoreElements()) {
             joined.add(values.nextElement());
             if (joined.length() > MAX_FORWARDED_HEADER_LENGTH) {
                 return null;
             }
         }
+
         return joined.length() == 0 ? null : joined.toString();
     }
 
@@ -213,29 +218,39 @@ public class PublicPedidoRateLimitFilter extends OncePerRequestFilter {
         if (value == null || value.isBlank()) {
             return null;
         }
+
         String address = value.trim();
+
         if (IPV4.matcher(address).matches()) {
             String[] octets = address.split("\\.", -1);
+
             if (octets.length != 4) {
                 return null;
             }
+
             byte[] parsed = new byte[4];
+
             try {
                 for (int i = 0; i < octets.length; i++) {
                     int octet = Integer.parseInt(octets[i]);
+
                     if (octet > 255) {
                         return null;
                     }
+
                     parsed[i] = (byte) octet;
                 }
+
                 return parsed;
             } catch (NumberFormatException exception) {
                 return null;
             }
         }
+
         if (!IPV6.matcher(address).matches() || !address.contains(":")) {
             return null;
         }
+
         try {
             byte[] parsed = InetAddress.getByName(address).getAddress();
             return parsed.length == 16 ? parsed : null;
@@ -260,6 +275,7 @@ public class PublicPedidoRateLimitFilter extends OncePerRequestFilter {
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+
         objectMapper.writeValue(
                 response.getOutputStream(),
                 new ErrorResponseDTO(status.value(), message, LocalDateTime.now())
@@ -276,19 +292,24 @@ public class PublicPedidoRateLimitFilter extends OncePerRequestFilter {
 
         static Cidr parse(String value) {
             String[] parts = value.trim().split("/", -1);
+
             if (parts.length != 2) {
                 throw new IllegalArgumentException("CIDR de proxy confiable no válido: " + value);
             }
+
             byte[] network = parseIp(parts[0]);
             int prefix;
+
             try {
                 prefix = Integer.parseInt(parts[1]);
             } catch (NumberFormatException exception) {
                 throw new IllegalArgumentException("CIDR de proxy confiable no válido: " + value, exception);
             }
+
             if (prefix < 0 || prefix > network.length * 8) {
                 throw new IllegalArgumentException("CIDR de proxy confiable no válido: " + value);
             }
+
             return new Cidr(network, prefix);
         }
 
@@ -296,49 +317,64 @@ public class PublicPedidoRateLimitFilter extends OncePerRequestFilter {
             if (network.length != address.length) {
                 return false;
             }
+
             int fullBytes = prefixLength / 8;
             int remainingBits = prefixLength % 8;
+
             for (int i = 0; i < fullBytes; i++) {
                 if (network[i] != address[i]) {
                     return false;
                 }
             }
+
             if (remainingBits == 0) {
                 return true;
             }
+
             int mask = 0xff << (8 - remainingBits);
             return (network[fullBytes] & mask) == (address[fullBytes] & mask);
         }
 
         private static byte[] parseIp(String value) {
             String address = value.trim();
+
             if (IPV4.matcher(address).matches()) {
                 String[] octets = address.split("\\.", -1);
+
                 if (octets.length != 4) {
                     throw new IllegalArgumentException("IP de proxy confiable no válida: " + value);
                 }
+
                 byte[] parsed = new byte[4];
+
                 try {
                     for (int i = 0; i < octets.length; i++) {
                         int octet = Integer.parseInt(octets[i]);
+
                         if (octet > 255) {
                             throw new IllegalArgumentException("IP de proxy confiable no válida: " + value);
                         }
+
                         parsed[i] = (byte) octet;
                     }
                 } catch (NumberFormatException exception) {
                     throw new IllegalArgumentException("IP de proxy confiable no válida: " + value, exception);
                 }
+
                 return parsed;
             }
+
             if (!IPV6.matcher(address).matches() || !address.contains(":")) {
                 throw new IllegalArgumentException("IP de proxy confiable no válida: " + value);
             }
+
             try {
                 byte[] parsed = InetAddress.getByName(address).getAddress();
+
                 if (parsed.length != 16) {
                     throw new IllegalArgumentException("IP de proxy confiable no válida: " + value);
                 }
+
                 return parsed;
             } catch (UnknownHostException exception) {
                 throw new IllegalArgumentException("IP de proxy confiable no válida: " + value, exception);
