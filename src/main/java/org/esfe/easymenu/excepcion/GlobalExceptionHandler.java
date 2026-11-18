@@ -9,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -30,6 +32,17 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(CorreoDuplicadoException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarCorreoDuplicado(CorreoDuplicadoException ex) {
+        return construir(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ConflictoIdempotenciaException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarConflictoIdempotencia(
+            ConflictoIdempotenciaException ex) {
+        return construir(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     // 400: datos inválidos en la petición (campos vacíos, cantidad menor a 1, etc.)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponseDTO> manejarValidacion(MethodArgumentNotValidException ex) {
@@ -39,10 +52,21 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.BAD_REQUEST, mensaje);
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarParametroInvalido(MethodArgumentTypeMismatchException ex) {
+        return construir(HttpStatus.BAD_REQUEST, "El parámetro '" + ex.getName() + "' tiene un formato inválido");
+    }
+
     // 400: el cuerpo de la petición no es un JSON válido
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponseDTO> manejarJsonInvalido(HttpMessageNotReadableException ex) {
         return construir(HttpStatus.BAD_REQUEST, "El cuerpo de la petición no es válido");
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponseDTO> manejarMetodoNoPermitido(
+            HttpRequestMethodNotSupportedException ex) {
+        return construir(HttpStatus.METHOD_NOT_ALLOWED, "Método HTTP no permitido para esta ruta");
     }
 
     // 500: cualquier otro error inesperado (no se muestran detalles internos)

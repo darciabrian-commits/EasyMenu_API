@@ -2,6 +2,7 @@ package org.esfe.easymenu.servicios.implementaciones;
 
 import org.esfe.easymenu.dtos.PagoDTO;
 import org.esfe.easymenu.dtos.ProcesarPagoDTO;
+import org.esfe.easymenu.dtos.ResumenVentasResponseDTO;
 import org.esfe.easymenu.excepcion.RecursoNoEncontradoException;
 import org.esfe.easymenu.excepcion.ReglaNegocioException;
 import org.esfe.easymenu.modelos.*;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,7 +32,7 @@ public class PagoServiceImpl implements IPagoService {
     @Transactional // HU-5: Garantiza integridad transaccional entre Pedido y Pago
     public PagoDTO cobrarPedido(ProcesarPagoDTO dto) {
         // HU-5: Validar existencia del pedido
-        Pedido pedido = pedidoRepository.findById(dto.getPedidoId())
+        Pedido pedido = pedidoRepository.buscarPorIdConBloqueo(dto.getPedidoId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Pedido no encontrado con ID: " + dto.getPedidoId()));
 
                // Solo se puede cobrar un pedido que está esperando el pago
@@ -97,26 +100,75 @@ public class PagoServiceImpl implements IPagoService {
     @Override
     @Transactional // HU-12: Operación atómica de reembolso
     public PagoDTO reembolsarPago(Long pagoId, String motivo) {
-        Pago pago = pagoRepository.findById(pagoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Registro de pago no encontrado con ID: " + pagoId));
+        Long pedidoId = pagoRepository.buscarPedidoIdPorPagoId(pagoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Registro de pago no encontrado con ID: " + pagoId));
+        Pedido pedido = pedidoRepository.buscarPorIdConBloqueo(pedidoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Registro de pago no encontrado con ID: " + pagoId));
+        Pago pago = pagoRepository.buscarPorIdConBloqueo(pagoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Registro de pago no encontrado con ID: " + pagoId));
 
-        if (pago.getEstado() == EstadoPago.REEMBOLSADO) {
-            throw new ReglaNegocioException("Este pago ya fue reembolsado anteriormente");
+        if (!pedidoId.equals(pago.getPedido().getId())) {
+            throw new ReglaNegocioException(
+                    "El pedido asociado al pago cambió durante el reembolso");
+        }
+
+        if (pago.getEstado() != EstadoPago.COMPLETADO) {
+            throw new ReglaNegocioException("Solo se pueden reembolsar pagos completados");
         }
 
         if (motivo == null || motivo.trim().isEmpty()) {
             throw new ReglaNegocioException("Debe especificar un motivo válido para procesar el reembolso");
         }
 
+        String motivoNormalizado = motivo.trim();
+        pago.setFechaReembolso(LocalDateTime.now());
         pago.setEstado(EstadoPago.REEMBOLSADO);
-        pago.setMotivoReembolso(motivo);
+        pago.setMotivoReembolso(motivoNormalizado);
 
-        // Cancelar pedido asociado
-        Pedido pedido = pago.getPedido();
-        pedido.setEstado(EstadoPedido.CANCELADO);
+        pedido.setEstado(EstadoPedido.REEMBOLSADO);
         pedidoRepository.save(pedido);
 
         return convertirADto(pagoRepository.save(pago));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResumenVentasResponseDTO obtenerResumenVentas(LocalDate fecha) {
+        LocalDateTime inicio = fecha.atStartOfDay();
+        LocalDateTime fin = fecha.plusDays(1).atStartOfDay();
+
+        PagoRepository.ResumenCobrosProjection cobros =
+                pagoRepository.resumirCobrosEntre(inicio, fin);
+        PagoRepository.ResumenReembolsosProjection reembolsos =
+                pagoRepository.resumirReembolsosEntre(inicio, fin);
+
+        BigDecimal efectivo = importeOCero(cobros.getTotalCobradoEfectivo());
+        BigDecimal tarjeta = importeOCero(cobros.getTotalCobradoTarjeta());
+        BigDecimal transferencia = importeOCero(cobros.getTotalCobradoTransferencia());
+        BigDecimal totalBruto = efectivo.add(tarjeta).add(transferencia);
+        BigDecimal totalReembolsos = importeOCero(reembolsos.getTotalReembolsos());
+
+        return new ResumenVentasResponseDTO(
+                fecha,
+                cantidadOCero(cobros.getCantidadCobros()),
+                efectivo,
+                tarjeta,
+                transferencia,
+                totalBruto,
+                cantidadOCero(reembolsos.getCantidadReembolsos()),
+                totalReembolsos,
+                totalBruto.subtract(totalReembolsos));
+    }
+
+    private BigDecimal importeOCero(BigDecimal importe) {
+        return importe == null ? BigDecimal.ZERO : importe;
+    }
+
+    private long cantidadOCero(Long cantidad) {
+        return cantidad == null ? 0 : cantidad;
     }
 
     private PagoDTO convertirADto(Pago pago) {

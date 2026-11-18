@@ -1,5 +1,6 @@
 package org.esfe.easymenu.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,147 +15,249 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.config.Customizer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-        private final JwtFilter jwtFilter;
-        private final CustomUserDetailsService userDetailsService;
+    private final JwtFilter jwtFilter;
+    private final CustomUserDetailsService userDetailsService;
 
-        public SecurityConfig(
-                        JwtFilter jwtFilter,
-                        CustomUserDetailsService userDetailsService) {
-                this.jwtFilter = jwtFilter;
-                this.userDetailsService = userDetailsService;
-        }
+    public SecurityConfig(
+            JwtFilter jwtFilter,
+            CustomUserDetailsService userDetailsService) {
+        this.jwtFilter = jwtFilter;
+        this.userDetailsService = userDetailsService;
+    }
 
-        @Bean
-        public PasswordEncoder passwordEncoder() {
-                return new BCryptPasswordEncoder();
-        }
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
-        @Bean
-        public AuthenticationProvider authenticationProvider() {
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
 
-                DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
 
-                authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setUserDetailsService(userDetailsService);
 
-                authProvider.setPasswordEncoder(
-                                passwordEncoder());
+        authProvider.setPasswordEncoder(
+                passwordEncoder());
 
-                return authProvider;
-        }
+        return authProvider;
+    }
 
-        @Bean
-        public AuthenticationManager authenticationManager(
-                        AuthenticationConfiguration config) throws Exception {
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration config) throws Exception {
 
-                return config.getAuthenticationManager();
-        }
+        return config.getAuthenticationManager();
+    }
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(
-                        HttpSecurity http) throws Exception {
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            PublicPedidoRateLimitFilter publicPedidoRateLimitFilter) throws Exception {
 
-                http
-                                .csrf(csrf -> csrf.disable())
+        http
+                .cors(Customizer.withDefaults())
 
-                                .sessionManagement(session -> session.sessionCreationPolicy(
-                                                SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable())
 
-                                .authorizeHttpRequests(auth -> auth
+                .sessionManagement(session -> session.sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS))
 
-                                                // LOGIN Y SWAGGER
-                                                .requestMatchers(
-                                                                "/api/auth/**",
-                                                                "/v3/api-docs/**",
-                                                                "/swagger-ui/**",
-                                                                "/swagger-ui.html")
-                                                .permitAll()
+                .authorizeHttpRequests(auth -> auth
 
-                                                // PRODUCTOS - CONSULTA PÚBLICA
-                                                .requestMatchers(
-                                                                HttpMethod.GET,
-                                                                "/api/productos/**")
-                                                .permitAll()
+                        // LOGIN Y SWAGGER
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/login")
+                        .permitAll()
 
-                                                // PRODUCTOS - SOLO ADMINISTRADOR
-                                                .requestMatchers(
-                                                                HttpMethod.POST,
-                                                                "/api/productos/**")
-                                                .hasRole("ADMINISTRADOR")
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html")
+                        .permitAll()
 
-                                                .requestMatchers(
-                                                                HttpMethod.PUT,
-                                                                "/api/productos/**")
-                                                .hasRole("ADMINISTRADOR")
+                        // USUARIOS - SOLO ADMINISTRADOR
+                        .requestMatchers(
+                                "/api/usuarios",
+                                "/api/usuarios/**")
+                        .hasRole("ADMINISTRADOR")
 
-                                                .requestMatchers(
-                                                                HttpMethod.PATCH,
-                                                                "/api/productos/**")
-                                                .hasRole("ADMINISTRADOR")
+                        // PRODUCTOS - CONSULTA PÚBLICA
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/productos/**")
+                        .permitAll()
 
-                                                .requestMatchers(
-                                                                HttpMethod.DELETE,
-                                                                "/api/productos/**")
-                                                .hasRole("ADMINISTRADOR")
+                        // PRODUCTOS - SOLO ADMINISTRADOR
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/productos/**")
+                        .hasRole("ADMINISTRADOR")
 
-                                                // USUARIOS
-                                                .requestMatchers(
-                                                                "/api/usuarios/**")
-                                                .hasRole("ADMINISTRADOR")
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/productos/**")
+                        .hasRole("ADMINISTRADOR")
 
-                                                // PEDIDOS - CLIENTE SIN LOGIN
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/productos/**")
+                        .hasRole("ADMINISTRADOR")
 
-                                                // Crear un pedido
-                                                .requestMatchers(
-                                                                HttpMethod.POST,
-                                                                "/api/pedidos")
-                                                .permitAll()
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/productos/**")
+                        .hasRole("ADMINISTRADOR")
 
-                                                // Consultar un pedido mediante su código corto
-                                                .requestMatchers(
-                                                                HttpMethod.GET,
-                                                                "/api/pedidos/codigo/**")
-                                                .permitAll()
+                        // PEDIDOS - CLIENTE SIN LOGIN
 
-                                                // Cancelar su pedido mediante código corto
-                                                .requestMatchers(
-                                                                HttpMethod.PATCH,
-                                                                "/api/pedidos/codigo/*/cancelar")
-                                                .permitAll()
+                        // Crear un pedido
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/pedidos")
+                        .permitAll()
 
-                                                // PEDIDOS - PERSONAL AUTENTICADO
-                                                .requestMatchers(
-                                                                "/api/pedidos/**")
-                                                .hasAnyRole(
-                                                                "ADMINISTRADOR",
-                                                                "CAJERO",
-                                                                "COCINA")
-                                                // PAGOS - SOLO CAJERO Y ADMINISTRADOR
-                                                .requestMatchers(
-                                                                "/api/pagos/**")
-                                                .hasAnyRole(
-                                                                "ADMINISTRADOR",
-                                                                "CAJERO")
+                        // Consultar un pedido mediante su código corto
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/pedidos/codigo/**")
+                        .permitAll()
 
-                                                // Permitir que Spring muestre el error real
-                                                .requestMatchers("/error")
-                                                .permitAll()
+                        // Cancelar su pedido mediante código corto
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/pedidos/codigo/*/cancelar")
+                        .permitAll()
 
-                                                // Cualquier otra ruta necesita login
-                                                .anyRequest()
-                                                .authenticated())
+                        // PEDIDOS - PERSONAL AUTENTICADO
+                        .requestMatchers(
+                                "/api/pedidos/**")
+                        .hasAnyRole(
+                                "ADMINISTRADOR",
+                                "CAJERO",
+                                "COCINA")
 
-                                .authenticationProvider(
-                                                authenticationProvider())
+                        // El resumen de ventas es exclusivo del administrador
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/pagos/resumen")
+                        .hasRole("ADMINISTRADOR")
 
-                                .addFilterBefore(
-                                                jwtFilter,
-                                                UsernamePasswordAuthenticationFilter.class);
+                        // PAGOS - SOLO CAJERO Y ADMINISTRADOR
+                        .requestMatchers(
+                                "/api/pagos/**")
+                        .hasAnyRole(
+                                "ADMINISTRADOR",
+                                "CAJERO")
 
-                return http.build();
-        }
+                        // Permitir que Spring muestre el error real
+                        .requestMatchers("/error")
+                        .permitAll()
+
+                        // Cualquier otra ruta necesita login
+                        .anyRequest()
+                        .authenticated())
+
+                .authenticationProvider(
+                        authenticationProvider())
+
+                .addFilterBefore(
+                        publicPedidoRateLimitFilter,
+                        UsernamePasswordAuthenticationFilter.class)
+
+                .addFilterBefore(
+                        jwtFilter,
+                        UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+                "https://*.app.github.dev",
+                "http://localhost:*",
+                "https://localhost:*"
+        ));
+
+        configuration.setAllowedMethods(Arrays.asList(
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "OPTIONS"
+        ));
+
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With"
+        ));
+
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration("/**", configuration);
+
+        return source;
+    }
+
+    @Bean
+    public PublicPedidoRateLimitFilter publicPedidoRateLimitFilter(
+            ObjectMapper objectMapper,
+            @Value("${easymenu.rate-limit.pedido-creacion.max-requests:30}")
+            int createLimit,
+            @Value("${easymenu.rate-limit.pedido-publico.max-requests:60}")
+            int publicLimit,
+            @Value("${easymenu.rate-limit.window-seconds:60}")
+            long windowSeconds,
+            @Value("${easymenu.rate-limit.trusted-proxy-cidrs:}")
+            String trustedProxyCidrs) {
+
+        List<String> proxyCidrs = trustedProxyCidrs.isBlank()
+                ? List.of()
+                : Arrays.asList(trustedProxyCidrs.split(",", -1));
+
+        return new PublicPedidoRateLimitFilter(
+                objectMapper,
+                createLimit,
+                publicLimit,
+                Math.multiplyExact(windowSeconds, 1000),
+                proxyCidrs);
+    }
+
+    @Bean
+    public FilterRegistrationBean<PublicPedidoRateLimitFilter> publicPedidoRateLimitFilterRegistration(
+            PublicPedidoRateLimitFilter filter) {
+
+        FilterRegistrationBean<PublicPedidoRateLimitFilter> registration =
+                new FilterRegistrationBean<>(filter);
+
+        registration.setEnabled(false);
+
+        return registration;
+    }
 }

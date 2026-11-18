@@ -1,5 +1,6 @@
 package org.esfe.easymenu.controladores;
 
+import jakarta.validation.Valid;
 import org.esfe.easymenu.dtos.JwtResponseDTO;
 import org.esfe.easymenu.dtos.LoginRequestDTO;
 import org.esfe.easymenu.security.JwtUtil;
@@ -32,7 +33,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(
-            @RequestBody LoginRequestDTO loginDTO
+            @Valid @RequestBody LoginRequestDTO loginDTO
     ) {
 
         try {
